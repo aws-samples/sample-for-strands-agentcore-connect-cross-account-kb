@@ -572,7 +572,16 @@ These queries work with the TPC-H dataset in Redshift Serverless:
 2. `who are the top parts supplier in united states by volume`
 3. `what is the total revenue by region for the year 1998`
 4. `which products generated the highest revenue after discounts`
-5. `show me orders with the highest priority from the last quarter of 1997`
+5. `show the 100 highest-value orders marked 1-URGENT from October 1 through December 31, 1997`
+
+Keep row-returning questions bounded with an explicit row count, date range, and sort order. A structured Knowledge Base translates natural language to SQL; an unbounded question can produce an oversized result set and cause `RetrieveAndGenerate` to fail even when the invocation path and IAM configuration are healthy.
+
+## Results
+
+In the Streamlit UI make sure to choose the right `Invocation mode` which can be `Local` or `AgentCore` or `Harness`. Make sure the right `ARN` is populated for `AgentCore` or `Harness`. Please refer to the screen shots below.
+
+![Invocation Mode](/images/Choose_Invocation_Mode.png)
+![Harness](/images/Harness.png)
 
 ### Define derived business metrics before testing
 

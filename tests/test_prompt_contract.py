@@ -27,6 +27,8 @@ class PromptContractTests(unittest.TestCase):
 
     def test_prompt_preserves_queries_and_requires_defined_metrics(self):
         self.assertIn("exactly as written", SYSTEM_PROMPT)
+        self.assertIn("at most once per user turn", SYSTEM_PROMPT)
+        self.assertIn("without retrying or changing the query", SYSTEM_PROMPT)
         self.assertIn("ask the user to define it", SYSTEM_PROMPT)
         self.assertIn("do not change product names", SYSTEM_PROMPT)
 

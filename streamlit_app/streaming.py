@@ -54,6 +54,8 @@ def strip_thinking_stream(stream):
 
 def extract_text_from_event(event) -> str:
     """Pull text from a Strands stream event, ignoring control frames."""
+    if isinstance(event, str):
+        return event
     if not isinstance(event, dict):
         return ""
 
