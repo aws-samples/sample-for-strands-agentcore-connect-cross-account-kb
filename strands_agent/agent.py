@@ -50,6 +50,8 @@ SYSTEM_PROMPT = (
     "answer questions about customers, suppliers, orders, revenue, and "
     "products. When calling the tool, pass the user's latest question exactly "
     "as written; do not change its wording, capitalization, or punctuation. "
+    "Call the tool at most once per user turn. If the tool returns an error, "
+    "report the error without retrying or changing the query. "
     "If a business metric is not explicitly defined (for example, the formula "
     "for profit margin), ask the user to define it before calling the tool; "
     "never invent a metric definition. Treat the tool response as the factual "
@@ -220,7 +222,10 @@ try:
         actor_id = payload.get("actor_id", "default-user")
         agent = create_agent(session_id=session_id, actor_id=actor_id)
         async for event in agent.stream_async(prompt):
-            yield event
+            if isinstance(event, dict):
+                text = event.get("data")
+                if isinstance(text, str) and text:
+                    yield text
 
 except ImportError:
     pass

@@ -157,7 +157,8 @@ with st.sidebar:
         "Who are the top parts suppliers in the United States by volume?",
         "What is the total revenue by region for the year 1998?",
         "Which products generated the highest revenue after discounts?",
-        "Show me orders with the highest priority from the last quarter of 1997.",
+        "Show the 100 highest-value orders marked 1-URGENT from October 1 through "
+        "December 31, 1997.",
     ]
     for q in sample_queries:
         if st.button(q, key=q, use_container_width=True):

@@ -56,6 +56,9 @@ class StreamingTests(unittest.TestCase):
 
         self.assertEqual(extract_text_from_event(event), "token")
 
+    def test_extracts_agentcore_json_string_token(self):
+        self.assertEqual(extract_text_from_event("token"), "token")
+
     def test_ignores_control_and_final_result_frames(self):
         self.assertEqual(extract_text_from_event({"event": {"messageStop": {}}}), "")
         self.assertEqual(extract_text_from_event({"result": "complete"}), "")
@@ -82,6 +85,14 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual(
             b"".join(iter_streaming_body_chunks(body)),
             complete,
+        )
+
+    def test_decodes_agentcore_json_string_frame(self):
+        body = FakeStreamingBody([b'data: "answer"\n\n'])
+
+        self.assertEqual(
+            "".join(iter_agentcore_text(iter_streaming_body_chunks(body))),
+            "answer",
         )
 
     def test_raises_when_stream_fails_before_returning_payload(self):
