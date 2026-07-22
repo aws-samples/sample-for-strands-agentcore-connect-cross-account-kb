@@ -1,0 +1,16 @@
+# Secrets (local environment files are never committed)
+.env.local
+
+# CDK Build Artifacts
+cdk/cdk.out/
+cdk/node_modules/
+
+# CLI Internals
+.cli/*
+
+# Ephemeral Staging
+.cache/*
+
+# Deployment state carries real account IDs and resource ARNs — keep it local.
+# (The AgentCore CLI default is to commit .cli/deployed-state.json; this public
+# sample deliberately does not.)

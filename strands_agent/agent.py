@@ -1,0 +1,265 @@
+"""
+Strands Agent for cross-account Bedrock Knowledge Base queries.
+
+The KB access layer (STS AssumeRole + retrieve_and_generate) lives in
+kb_mcp_server.py, exposed as an MCP tool over stdio. This file handles
+agent orchestration only: model selection, memory, and the AgentCore entrypoint.
+
+Deployment options:
+  - Local:     python agent.py
+  - AgentCore: agentcore configure --entrypoint agent.py && agentcore deploy
+  - Streamlit: Used as an import by streamlit_app/app.py
+
+NOTE: Heavy imports (strands, boto3) are deferred to first invocation so that
+AgentCore runtime initialization completes within the 30-second limit.
+"""
+
+import atexit
+import logging
+import os
+import uuid
+
+try:
+    from .configuration import config_value, load_sibling_config
+except ImportError:
+    from configuration import config_value, load_sibling_config
+
+# ---------------------------------------------------------------------------
+# Configuration: load from config.json (deployed with agent), then env vars
+# ---------------------------------------------------------------------------
+_file_config = load_sibling_config(__file__)
+
+AGENT_MODEL_ID = config_value(
+    _file_config, "AGENT_MODEL_ID", "us.amazon.nova-pro-v1:0"
+)
+AWS_REGION = config_value(_file_config, "AWS_REGION", "us-west-2")
+AGENTCORE_MEMORY_ID = config_value(_file_config, "AGENTCORE_MEMORY_ID", "")
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# System prompt
+# ---------------------------------------------------------------------------
+SYSTEM_PROMPT = (
+    "You are an assistant that helps users query inventory data from our "
+    "Redshift Serverless database. Use the query_knowledge_base tool to "
+    "answer questions about customers, suppliers, orders, revenue, and "
+    "products. When calling the tool, pass the user's latest question exactly "
+    "as written; do not change its wording, capitalization, or punctuation. "
+    "If a business metric is not explicitly defined (for example, the formula "
+    "for profit margin), ask the user to define it before calling the tool; "
+    "never invent a metric definition. Treat the tool response as the factual "
+    "source, and do not change product names, rankings, values, signs, or units. "
+    "Always present the results clearly."
+)
+
+# ---------------------------------------------------------------------------
+# Agent singleton for no-memory path (created on first use, reused after)
+# ---------------------------------------------------------------------------
+_agent_instance = None
+_agent_config_key = None
+
+# ---------------------------------------------------------------------------
+# MCP client — connects to kb_mcp_server.py subprocess on first use.
+# The subprocess stays alive for the process lifetime so the credential cache
+# (RefreshableCredentials) in the server is reused across agent calls.
+# ---------------------------------------------------------------------------
+_mcp_client = None
+_mcp_tools  = None
+_mcp_config_key = None
+
+_TOOL_ENV_KEYS = (
+    "KNOWLEDGE_BASE_ID",
+    "TARGET_ROLE_ARN",
+    "KB_FOUNDATION_MODEL",
+    "AWS_REGION",
+    "KB_NUM_RESULTS",
+)
+
+
+def _build_tool_environment(overrides: dict | None = None) -> dict:
+    """Build the subprocess environment, applying explicit UI/runtime overrides."""
+    environment = dict(os.environ)
+    for name, value in (overrides or {}).items():
+        if name in _TOOL_ENV_KEYS:
+            environment[name] = str(value)
+    return environment
+
+
+def _close_mcp_client() -> None:
+    """Close the active MCP subprocess, if any."""
+    global _mcp_client, _mcp_tools, _mcp_config_key
+    if _mcp_client is not None:
+        try:
+            _mcp_client.__exit__(None, None, None)
+        except Exception:
+            logger.warning("Failed to close MCP KB server cleanly", exc_info=True)
+    _mcp_client = None
+    _mcp_tools = None
+    _mcp_config_key = None
+
+
+def _get_mcp_tools(tool_config: dict | None = None) -> list:
+    """Launch the KB MCP subprocess, restarting it when configuration changes."""
+    import sys
+    from mcp import StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    from strands.tools.mcp import MCPClient
+
+    global _mcp_client, _mcp_tools, _mcp_config_key
+    subprocess_env = _build_tool_environment(tool_config)
+    config_key = tuple((name, subprocess_env.get(name, "")) for name in _TOOL_ENV_KEYS)
+
+    if _mcp_tools is not None and _mcp_config_key == config_key:
+        return _mcp_tools
+    if _mcp_client is not None:
+        logger.info("KB configuration changed; restarting MCP server")
+        _close_mcp_client()
+
+    server_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kb_mcp_server.py")
+    _mcp_client = MCPClient(lambda: stdio_client(StdioServerParameters(
+        command=sys.executable,
+        args=[server_path],
+        env=subprocess_env,
+    )))
+    _mcp_client.__enter__()
+    _mcp_tools = _mcp_client.list_tools_sync()
+    _mcp_config_key = config_key
+    logger.info("MCP KB server started; tools: %s", [t.tool_name for t in _mcp_tools])
+    return _mcp_tools
+
+
+atexit.register(_close_mcp_client)
+
+
+def create_agent(
+    session_id: str = None,
+    actor_id: str = "default-user",
+    agent_model_id: str = None,
+    region_name: str = None,
+    tool_config: dict | None = None,
+    reuse_agent: bool = True,
+):
+    """Create and return a configured Strands Agent (lazy imports).
+
+    When AGENTCORE_MEMORY_ID is set and a session_id is provided, each call
+    returns a new agent backed by AgentCoreMemorySessionManager so conversation
+    history is persisted and restored across sessions.
+
+    When memory is not configured the agent is a module-level singleton unless
+    reuse_agent is False. Streamlit uses the latter option so each browser
+    session owns its conversation history.
+    """
+    global _agent_instance, _agent_config_key
+
+    from strands import Agent
+    from strands.models.bedrock import BedrockModel
+
+    selected_model_id = agent_model_id or AGENT_MODEL_ID
+    selected_region = region_name or AWS_REGION
+    tools = _get_mcp_tools(tool_config)
+    model = BedrockModel(model_id=selected_model_id, region_name=selected_region)
+    config_key = (selected_model_id, selected_region, _mcp_config_key)
+
+    if AGENTCORE_MEMORY_ID and session_id:
+        from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+        from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
+        memory_config = AgentCoreMemoryConfig(
+            memory_id=AGENTCORE_MEMORY_ID,
+            session_id=session_id,
+            actor_id=actor_id,
+            filter_restored_tool_context=True,
+        )
+        session_manager = AgentCoreMemorySessionManager(
+            agentcore_memory_config=memory_config,
+            region_name=selected_region,
+        )
+        logger.info("Created agent with AgentCore Memory (session=%s actor=%s)", session_id, actor_id)
+        return Agent(
+            model=model,
+            tools=tools,
+            system_prompt=SYSTEM_PROMPT,
+            session_manager=session_manager,
+        )
+
+    if not reuse_agent:
+        logger.info("Created isolated agent (no memory)")
+        return Agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
+
+    # No memory — reuse singleton
+    if _agent_instance is None or _agent_config_key != config_key:
+        _agent_instance = Agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
+        _agent_config_key = config_key
+        logger.info("Created agent (no memory)")
+    return _agent_instance
+
+
+# ---------------------------------------------------------------------------
+# AgentCore entrypoint (used when deployed to Bedrock AgentCore)
+# ---------------------------------------------------------------------------
+_AGENTCORE_AVAILABLE = False
+try:
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+
+    app = BedrockAgentCoreApp()
+    _AGENTCORE_AVAILABLE = True
+
+    @app.entrypoint
+    async def invoke_agent(payload, context):
+        """AgentCore invocation handler — streams tokens as they are generated."""
+        prompt = payload.get("prompt", "")
+        if not prompt:
+            yield {"error": "No prompt provided in payload"}
+            return
+
+        session_id = (context.session_id if context else None) or str(uuid.uuid4())
+        actor_id = payload.get("actor_id", "default-user")
+        agent = create_agent(session_id=session_id, actor_id=actor_id)
+        async for event in agent.stream_async(prompt):
+            yield event
+
+except ImportError:
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Execution: AgentCore server OR local CLI
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import sys
+
+    if _AGENTCORE_AVAILABLE and len(sys.argv) <= 1 and not sys.stdin.isatty():
+        # Running inside AgentCore container — hand off to the runtime server
+        app.run()
+    else:
+        # Local testing mode
+        os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
+        agent = create_agent()
+
+        if len(sys.argv) > 1:
+            # One-shot mode: python agent.py "your question here"
+            question = " ".join(sys.argv[1:])
+            print(f"\nQuery: {question}\n")
+            response = agent(question)
+            print(f"\nResponse:\n{response}")
+        else:
+            # Interactive REPL
+            print("Strands Agent - Cross-Account KB Query")
+            print("Type 'quit' to exit.\n")
+            while True:
+                try:
+                    question = input("You: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("\nGoodbye!")
+                    break
+                if question.lower() in ("quit", "exit", "q"):
+                    print("Goodbye!")
+                    break
+                if not question:
+                    continue
+                response = agent(question)
+                print(f"\nAgent: {response}\n")

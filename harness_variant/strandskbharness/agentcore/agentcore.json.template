@@ -1,0 +1,117 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "strandskbharness",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "strandskbharness"
+  },
+  "runtimes": [],
+  "memories": [
+    {
+      "name": "strands_kb_harnessMemory",
+      "eventExpiryDuration": 30,
+      "strategies": [
+        {
+          "type": "SEMANTIC",
+          "namespaces": [
+            "/users/{actorId}/facts"
+          ]
+        },
+        {
+          "type": "USER_PREFERENCE",
+          "namespaces": [
+            "/users/{actorId}/preferences"
+          ]
+        },
+        {
+          "type": "SUMMARIZATION",
+          "namespaces": [
+            "/summaries/{actorId}/{sessionId}"
+          ]
+        },
+        {
+          "type": "EPISODIC",
+          "namespaces": [
+            "/episodes/{actorId}/{sessionId}"
+          ],
+          "reflectionNamespaces": [
+            "/episodes/{actorId}"
+          ]
+        }
+      ]
+    }
+  ],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [
+    {
+      "name": "strands-kb-gateway",
+      "protocolType": "None",
+      "description": "Gateway for strands-kb-gateway",
+      "targets": [
+        {
+          "name": "kbquery",
+          "targetType": "lambda",
+          "toolDefinitions": [
+            {
+              "name": "query_knowledge_base",
+              "description": "Query the cross-account Amazon Redshift Serverless knowledge base. Answers natural-language questions about customers, suppliers, orders, revenue, and products by assuming a role in the knowledge-base account and calling Bedrock retrieve_and_generate.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "A natural language question about the data in Redshift."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          ],
+          "compute": {
+            "host": "Lambda",
+            "implementation": {
+              "language": "Python",
+              "path": "tools/kb_query",
+              "handler": "handler.handler"
+            },
+            "pythonVersion": "PYTHON_3_12",
+            "timeout": 180,
+            "memorySize": 512,
+            "iamPolicy": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AssumeKBAccessRole",
+                  "Effect": "Allow",
+                  "Action": "sts:AssumeRole",
+                  "Resource": "arn:aws:iam::000000000000:role/bedrock_kb_access_role"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "authorizerType": "AWS_IAM",
+      "enableSemanticSearch": true,
+      "exceptionLevel": "NONE"
+    }
+  ],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [
+    {
+      "name": "strands_kb_harness",
+      "path": "app/strands_kb_harness"
+    }
+  ],
+  "datasets": [],
+  "payments": []
+}
