@@ -1,0 +1,7 @@
+{
+    "KNOWLEDGE_BASE_ID": "<your-kb-id>",
+    "TARGET_ROLE_ARN": "arn:aws:iam::<agent-kb-account>:role/bedrock_kb_access_role",
+    "KB_FOUNDATION_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "AWS_REGION": "us-west-2",
+    "KB_NUM_RESULTS": "5"
+}
