@@ -1,8 +1,8 @@
 # Cross-Account Knowledge Base Queries with Amazon Bedrock AgentCore
 
-This project demonstrates two ways to use **Amazon Bedrock AgentCore** to query a Knowledge Base in a different AWS account: a code-based **Strands Agent** on AgentCore Runtime and a declarative **AgentCore Harness**. The Knowledge Base connects to Amazon Redshift Serverless for structured data, and a Streamlit chat interface supports end-to-end testing.
+This project demonstrates two ways to use **Amazon Bedrock AgentCore** to query a Knowledge Base in a different AWS account: a code-based **Strands Agent** on AgentCore Runtime and a declarative **AgentCore harness**. The Knowledge Base connects to Amazon Redshift Serverless for structured data, and a Streamlit chat interface supports end-to-end testing.
 
-> **Note:** This project reimplements the cross-account Knowledge Base pattern from [Connect Amazon Bedrock Agents to Cross-Account Knowledge Bases](https://medium.com/@dwexpertkg/connect-amazon-bedrock-agents-to-cross-account-knowledge-bases-02694e900d8a) using both a Strands agent on AgentCore Runtime and an AgentCore Harness.
+> **Note:** This project reimplements the cross-account Knowledge Base pattern from [Connect Amazon Bedrock Agents to Cross-Account Knowledge Bases](https://medium.com/@dwexpertkg/connect-amazon-bedrock-agents-to-cross-account-knowledge-bases-02694e900d8a) using both a Strands agent on AgentCore Runtime and an AgentCore harness.
 
 ## Challenge
 
@@ -17,9 +17,17 @@ This pattern is useful for organizations that want to:
 
 ## Solution Overview
 
-This repository implements the cross-account query pattern in two ways: a **Strands Agent** deployed to AgentCore Runtime, and a **declarative AgentCore Harness**. In both variants, a tool uses AWS STS `AssumeRole` to query a Knowledge Base in another account. An interactive **Streamlit chat UI** supports local and deployed end-to-end testing with real-time token streaming.
+This repository implements the cross-account query pattern in two ways: a **Strands Agent** deployed to AgentCore Runtime, and a **declarative AgentCore harness**. In both variants, a tool uses AWS STS `AssumeRole` to query a Knowledge Base in another account. An interactive **Streamlit chat UI** supports local and deployed end-to-end testing with real-time token streaming.
 
 > The two variants demonstrate the same business outcome, but they are not drop-in replacements. The choice determines who owns the agent loop, how tools are hosted, which IAM principal crosses the account boundary, and which infrastructure you operate. See [Two Variants in This Repo](#two-variants-in-this-repo) before choosing an implementation.
+
+The following overview highlights the execution boundary shared by the two implementations. In
+Variant 1, the customer-managed Strands loop and local MCP server subprocess are packaged together
+inside AgentCore Runtime. In Variant 2, the managed Strands-powered harness loop and its MCP client
+run inside AgentCore Runtime; AgentCore Gateway and the AWS Lambda tool remain separate managed
+resources.
+
+![Architecture Overview](images/architecture_overview.png)
 
 ### Architecture *(Variant 1 — code-based agent)*
 
@@ -28,13 +36,14 @@ This repository implements the cross-account query pattern in two ways: a **Stra
 The diagram uses the official
 [AWS Architecture Icons package dated April 30, 2026](https://aws.amazon.com/architecture/icons/).
 Neutral labeled shapes represent non-AWS components such as Streamlit, Strands, and the local MCP
-subprocess.
+subprocess. The blue AgentCore Runtime boundary shows which components execute in the same runtime
+session.
 
 **Data flow (Variant 1 — code-based agent):**
 
-1. User sends a natural-language question via Streamlit UI or AgentCore API.
-2. The Strands Agent (Nova Pro) processes the request and calls the `query_knowledge_base` MCP tool.
-3. The MCP server (`kb_mcp_server.py`) assumes the KB access role via STS AssumeRole using auto-refreshing credentials.
+1. The Streamlit client calls `InvokeAgentRuntime`; applications can also call this API directly.
+2. Inside AgentCore Runtime, the Strands agent processes the request and calls the `query_knowledge_base` MCP tool.
+3. The local MCP server subprocess (`kb_mcp_server.py`), packaged in the same runtime workload, assumes the KB access role through AWS STS using auto-refreshing credentials.
 4. It calls `retrieve_and_generate` on the Bedrock Knowledge Base using Claude Haiku 4.5 with a cross-region inference profile.
 5. The Knowledge Base queries Amazon Redshift Serverless for structured data.
 6. The generated response streams back token-by-token to the user.
@@ -45,13 +54,13 @@ subprocess.
 
 **Data flow (Variant 2 — declarative harness):**
 
-1. User sends a natural-language question via Streamlit UI or the `InvokeHarness` API.
-2. AgentCore Harness runs the managed agent loop with Nova Pro and selects the Knowledge Base tool.
-3. AgentCore Gateway invokes the Lambda tool.
+1. The Streamlit client calls `InvokeHarness`; applications can also call this API directly.
+2. Inside AgentCore Runtime, the AgentCore harness runs the managed Strands-powered loop and uses its MCP client to call the selected Knowledge Base tool through AgentCore Gateway.
+3. AgentCore Gateway, which is outside the runtime boundary, invokes the Lambda tool.
 4. The Lambda function assumes the KB access role via AWS STS using auto-refreshing credentials.
 5. It calls `retrieve_and_generate` on the Bedrock Knowledge Base using Claude Haiku 4.5 with a cross-region inference profile.
 6. The Knowledge Base queries Amazon Redshift Serverless for structured data.
-7. The generated response streams back through the Harness to the user.
+7. The generated response streams back through the harness to the user.
 
 ## Two Variants in This Repo
 
@@ -60,19 +69,19 @@ AgentCore orchestration models. The cross-account requirement itself does not fa
 variant: both use a narrowly scoped role in the Knowledge Base account. Choose based on how much
 of the agent loop your team needs to customize and operate.
 
-> **Decision in one sentence:** Choose the code-based Strands variant when custom orchestration is a product requirement. Choose the Harness when its managed agent loop fits your use case and you prefer a configuration-first operating model.
+> **Decision in one sentence:** Choose the code-based Strands variant when custom orchestration is a product requirement. Choose the harness when its managed agent loop fits your use case and you prefer a configuration-first operating model.
 
-| Decision area | **Variant 1 — Code-Based Strands Agent** | **Variant 2 — Declarative AgentCore Harness** |
+| Decision area | **Variant 1 — Code-Based Strands Agent** | **Variant 2 — Declarative AgentCore harness** |
 | --- | --- | --- |
 | **Location** | [`strands_agent/`](strands_agent/) | [`harness_variant/`](harness_variant/) |
 | **Choose it when** | You need custom planning or control flow, framework hooks, middleware, retry behavior, detailed instrumentation, or direct ownership of tool dispatch and streaming | A standard managed agent loop meets the requirement and you want model, prompt, tools, memory, and loop limits managed primarily as configuration |
-| **Agent loop** | Your Python code runs the loop with the Strands Agents SDK | AgentCore runs the loop from the Harness definition |
-| **What you maintain** | `agent.py`, Python dependencies, MCP server, tool logic, and runtime configuration | Harness configuration and the Lambda tool; AgentCore manages the orchestration loop |
-| **Tool path** | AgentCore Runtime → local MCP subprocess → Knowledge Base | Harness → AgentCore Gateway → Lambda → Knowledge Base |
-| **Infrastructure shape** | AgentCore Runtime and Memory; the MCP server is packaged with the runtime | Harness, Memory, Gateway, and Lambda; this adds a managed tool-routing hop and a possible Lambda cold start |
+| **Agent loop** | Your Python code runs the loop with the Strands Agents SDK inside AgentCore Runtime | AgentCore runs the Strands-powered loop from the harness definition inside AgentCore Runtime |
+| **What you maintain** | `agent.py`, Python dependencies, the local MCP server, tool logic, and runtime configuration | Harness configuration and the Lambda tool; AgentCore manages the orchestration loop and MCP client |
+| **Tool path** | AgentCore Runtime (Strands loop → local MCP server subprocess) → Knowledge Base | AgentCore Runtime (managed harness loop and MCP client) → AgentCore Gateway MCP endpoint → Lambda → Knowledge Base |
+| **Infrastructure shape** | AgentCore Runtime and memory; the Strands loop and MCP server are packaged in the same runtime workload | A managed harness inside AgentCore Runtime, plus memory, Gateway, and Lambda; this adds a managed tool-routing hop and a possible Lambda cold start |
 | **Cross-account principal** | AgentCore Runtime execution role | Lambda execution role behind the Gateway |
 | **Invocation API** | `InvokeAgentRuntime` | `InvokeHarness` |
-| **Service maturity** | AgentCore Runtime is generally available | AgentCore Harness is generally available |
+| **Service maturity** | AgentCore Runtime is generally available | AgentCore harness is generally available |
 | **Get started** | [Implementation Walkthrough](#implementation-walkthrough) and [Running the Agent](#running-the-agent) | [Harness Variant](#variant-2--declarative-harness-managed-agent-loop) |
 
 Both variants are working implementations and can be deployed side by side. They share the
@@ -85,7 +94,7 @@ Harness.
 
 Use **Variant 1** when the orchestration behavior is part of your application logic. It is the better fit for teams that already use Strands, need nonstandard planning or error handling, want agent-local MCP integration, or must instrument and test each loop transition directly. The tradeoff is ownership of more Python code and its dependency lifecycle.
 
-Use **Variant 2** when the managed Harness loop already provides the behavior you need. It is the better fit when your team wants a configuration-first lifecycle, managed session isolation and loop execution, and centralized tool access through AgentCore Gateway. You still own and test the system prompt, tool implementation, IAM permissions, data access, and application-level behavior; the Harness removes custom **orchestration** code, not customer responsibility for the solution.
+Use **Variant 2** when the managed harness loop already provides the behavior you need. It is the better fit when your team wants a configuration-first lifecycle, managed session isolation and loop execution, and centralized tool access through AgentCore Gateway. You still own and test the system prompt, tool implementation, IAM permissions, data access, and application-level behavior; the harness removes custom **orchestration** code, not customer responsibility for the solution.
 
 Before choosing an agent variant, use this decision order:
 
@@ -98,6 +107,7 @@ Before choosing an agent variant, use this decision order:
 ```text
 .
 ├── images/
+│   ├── architecture_overview.png    # Shared execution-boundary overview
 │   ├── architecture.drawio          # Variant 1 architecture diagram, editable (draw.io)
 │   ├── architecture.png             # Variant 1 architecture diagram (PNG export)
 │   ├── architecture_harness.drawio  # Variant 2 architecture diagram, editable (draw.io)
@@ -430,13 +440,14 @@ cd ..
 
 ---
 
-## Variant 2 — Declarative Harness (Managed Agent Loop)
+## Variant 2 — Declarative harness (Managed Agent Loop)
 
 > This is the second of two variants in this repository. It has its own deployment stack, but reuses the IAM roles and setup artifacts from [Step 7](#step-7-create-iam-roles-policies-and-agentcore-memory). Review [Two Variants in This Repo](#two-variants-in-this-repo) before choosing it.
 
-AgentCore Harness provides a declarative, managed agent loop. Instead of writing and deploying `agent.py` for model selection, tool wiring, and loop execution, you declare the model, system prompt, memory, loop limits, and tools in configuration. AgentCore runs the agent loop.
+AgentCore harness provides a declarative, managed agent loop powered by Strands Agents. The harness is a managed abstraction that runs inside AgentCore Runtime. Instead of writing and deploying `agent.py` for model selection, tool wiring, and loop execution, you declare the model, system prompt, memory, loop limits, and tools in configuration. AgentCore runs the loop and its MCP
+client inside the runtime session.
 
-The deployable Harness implementation lives under [`harness_variant/strandskbharness/`](harness_variant/strandskbharness/). It does not replace the Strands `agent.py` deployment; both variants can run side by side, subject to their shared IAM setup and documented cleanup order.
+The deployable harness implementation lives under [`harness_variant/strandskbharness/`](harness_variant/strandskbharness/). It does not replace the Strands `agent.py` deployment; both variants can run side by side, subject to their shared IAM setup and documented cleanup order.
 
 > For a side-by-side comparison of the two variants, see [Two Variants in This Repo](#two-variants-in-this-repo).
 
@@ -444,22 +455,17 @@ The deployable Harness implementation lives under [`harness_variant/strandskbhar
 
 ![Harness Architecture Diagram](images/architecture_harness.png)
 
-The editable diagram lives at
-[`images/architecture_harness.drawio`](images/architecture_harness.drawio). In this
-implementation, custom Python does not run inside the managed agent loop. The cross-account
-`sts:AssumeRole` +
-`retrieve_and_generate` logic from `kb_mcp_server.py` is relocated into a **Lambda** and exposed
-to the Harness as a tool through an **AgentCore Gateway**:
+The editable diagram lives at [`images/architecture_harness.drawio`](images/architecture_harness.drawio). In this implementation, customer tool code does not run inside the managed agent loop. The cross-account `sts:AssumeRole` and `retrieve_and_generate` logic from `kb_mcp_server.py` is relocated into a separate **AWS Lambda** function and exposed to the harness through an **AgentCore Gateway** MCP endpoint.
 
 ```text
-Harness (Nova Pro, declarative)
-  └─ AgentCore Gateway (AWS_IAM auth)
-       └─ Lambda tool  (CDK-built from tools/kb_query/, sts:AssumeRole in its execution role)
-            └─ STS AssumeRole → agent-kb account
-                 └─ bedrock:retrieve_and_generate → Knowledge Base → Redshift Serverless
+AgentCore Runtime [AgentCore harness: managed Strands loop + MCP client]
+  → AgentCore Gateway MCP endpoint (AWS_IAM auth)
+  → Lambda tool (CDK-built from tools/kb_query/, sts:AssumeRole in its execution role)
+  → STS AssumeRole → agent-kb account
+  → bedrock:retrieve_and_generate → Knowledge Base → Redshift Serverless
 ```
 
-To regenerate both architecture variants after changing their shared layout, install [Pillow](https://pypi.org/project/pillow/) and run:
+To regenerate all architecture diagrams after changing their shared layout, install [Pillow](https://pypi.org/project/pillow/) and run.
 
 ```bash
 python scripts/generate_architecture_diagrams.py
@@ -488,13 +494,9 @@ agentcore validate
 AWS_PROFILE=agent agentcore deploy --yes
 ```
 
-The first deployment bootstraps the CDK environment when needed. Bootstrap and AgentCore Memory
-creation can take several minutes; wait for the command to finish and the Memory to become
-`ACTIVE`.
+The first deployment bootstraps the CDK environment when needed. Bootstrap and AgentCore Memory creation can take several minutes; wait for the command to finish and the Memory to become `ACTIVE`.
 
-After Phase 1, grant the new Lambda execution role permission to assume the KB access role.
-Add a statement to `bedrock_kb_access_role`'s trust policy in the **agent-kb** account (keep the
-existing statements):
+After Phase 1, grant the new Lambda execution role permission to assume the KB access role. Add a statement to `bedrock_kb_access_role`'s trust policy in the **agent-kb** account (keep the existing statements).
 
 ```json
 {
@@ -508,7 +510,7 @@ existing statements):
 > The stack does not output the Lambda execution role ARN directly — fetch it from the deployed function:
 > `aws lambda get-function --function-name strandskbharness-kbquery --query Configuration.Role`.
 
-Then attach the deployed Gateway and complete Phase 2:
+Then attach the deployed Gateway and complete Phase 2.
 
 ```bash
 # The Gateway ARN is printed by Phase 1 (GatewayStrandsKbGatewayArnOutput).
@@ -531,7 +533,7 @@ AWS_PROFILE=agent agentcore invoke \
     "What is the total number of customers?"
 ```
 
-You can also drive it from the **Streamlit UI in Harness mode** — select **Harness** in the sidebar and paste the harness ARN (`arn:aws:bedrock-agentcore:...:harness/...`), or pre-fill it:
+You can also drive it from the **Streamlit UI in Harness mode** — select **Harness** in the sidebar and paste the harness ARN (`arn:aws:bedrock-agentcore:...:harness/...`), or pre-fill it.
 
 ```bash
 # From the repository root:
@@ -765,7 +767,7 @@ scripts/delete_strands_agentcore_roles_policies.sh \
 
 Delete the Redshift Serverless workgroup and Knowledge Base from the agent-kb account console.
 
-> **Note:** The AgentCore Memory resource (`cross_account_kb_memory`) is not deleted by the cleanup scripts. Delete it manually via the AWS console or CLI if no longer needed:
+> **Note:** The AgentCore Memory resource (`cross_account_kb_memory`) is not deleted by the cleanup scripts. Delete it manually via the AWS console or CLI if no longer needed.
 
 ```bash
 aws bedrock-agentcore-control delete-memory --memory-id <AGENTCORE_MEMORY_ID> --profile agent
