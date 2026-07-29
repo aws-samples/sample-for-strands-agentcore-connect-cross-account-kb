@@ -63,6 +63,7 @@ class Node:
     icon: str | None = None
     badge: str | None = None
     accent: str = AWS_DARK
+    label_size: int = 13
 
     @property
     def center_x(self) -> int:
@@ -83,6 +84,15 @@ class Edge:
 
 
 @dataclass(frozen=True)
+class RuntimeBoundary:
+    x: int
+    y: int
+    width: int
+    height: int
+    label: str = "AgentCore Runtime"
+
+
+@dataclass(frozen=True)
 class Diagram:
     name: str
     title: str
@@ -90,6 +100,7 @@ class Diagram:
     nodes: tuple[Node, ...]
     edges: tuple[Edge, ...]
     model_links: tuple[Edge, ...]
+    runtime_boundary: RuntimeBoundary
 
 
 def resolve_font(candidates: Iterable[str]) -> str:
@@ -126,18 +137,17 @@ def diagram_definitions() -> tuple[Diagram, Diagram]:
     code = Diagram(
         name="architecture",
         title="Variant 1: Code-based Strands agent",
-        subtitle="Custom Python agent loop with a local MCP tool on Amazon Bedrock AgentCore Runtime",
+        subtitle="Customer-managed Strands loop and local MCP server packaged together in AgentCore Runtime",
         nodes=(
             Node("user", "User", 20, badge="U", accent=AWS_BLUE),
             Node("ui", "Streamlit\nchat UI", 165, badge="UI", accent=AWS_BLUE),
-            Node("runtime", "AgentCore\nRuntime", 325, icon="agentcore"),
-            Node("strands", "Strands Agent\nCustom agent loop", 480, badge="S", accent=AWS_TEAL),
-            Node("mcp", "Local MCP\nsubprocess", 635, badge="MCP", accent=AWS_TEAL),
+            Node("strands", "Strands Agent\nCustomer agent loop", 360, 255, badge="S", accent=AWS_TEAL),
+            Node("mcp", "Local MCP server\nsubprocess", 560, 255, badge="MCP", accent=AWS_TEAL),
             *common_tail,
             Node(
                 "agent_model",
                 "Amazon Nova Pro\nAgent model",
-                480,
+                360,
                 470,
                 icon="bedrock",
                 accent=AWS_TEAL,
@@ -145,29 +155,43 @@ def diagram_definitions() -> tuple[Diagram, Diagram]:
         ),
         edges=(
             Edge("user", "ui", "1  Question"),
-            Edge("ui", "runtime", "2  Invoke"),
-            Edge("runtime", "strands", "3  Run loop"),
-            Edge("strands", "mcp", "4  Tool call"),
-            Edge("mcp", "sts", "5  AssumeRole", AWS_MAGENTA),
+            Edge("ui", "strands", "2  Invoke"),
+            Edge("strands", "mcp", "3  Tool call"),
+            Edge("mcp", "sts", "4  AssumeRole", AWS_MAGENTA),
             Edge("sts", "role", "", AWS_MAGENTA),
-            Edge("role", "kb", "6  RetrieveAndGenerate"),
-            Edge("kb", "redshift", "7  Structured query"),
+            Edge("role", "kb", "5  RetrieveAndGenerate"),
+            Edge("kb", "redshift", "6  Structured query"),
         ),
         model_links=(
             Edge("agent_model", "strands", "model", AWS_TEAL, True),
             Edge("kb_model", "kb", "model", AWS_TEAL, True),
         ),
+        runtime_boundary=RuntimeBoundary(325, 190, 410, 440),
     )
 
     harness = Diagram(
         name="architecture_harness",
-        title="Variant 2: Declarative AgentCore Harness",
-        subtitle="Managed agent loop with AgentCore Gateway and an AWS Lambda tool",
+        title="Variant 2: Declarative AgentCore harness",
+        subtitle="Managed Strands-powered loop in AgentCore Runtime with Gateway and an AWS Lambda tool",
         nodes=(
             Node("user", "User", 20, badge="U", accent=AWS_BLUE),
             Node("ui", "Streamlit\nchat UI", 165, badge="UI", accent=AWS_BLUE),
-            Node("harness", "AgentCore\nHarness", 325, icon="agentcore"),
-            Node("gateway", "AgentCore\nGateway", 480, icon="agentcore"),
+            Node(
+                "harness",
+                "AgentCore harness\nStrands loop\nMCP client",
+                325,
+                255,
+                badge="S",
+                accent=AWS_TEAL,
+                label_size=11,
+            ),
+            Node(
+                "gateway",
+                "AgentCore Gateway\nMCP tool endpoint",
+                480,
+                icon="agentcore",
+                label_size=12,
+            ),
             Node("lambda", "AWS Lambda\nKB query tool", 635, icon="lambda"),
             *common_tail,
             Node(
@@ -182,7 +206,7 @@ def diagram_definitions() -> tuple[Diagram, Diagram]:
         edges=(
             Edge("user", "ui", "1  Question"),
             Edge("ui", "harness", "2  InvokeHarness"),
-            Edge("harness", "gateway", "3  Tool selection"),
+            Edge("harness", "gateway", "3  MCP tool call"),
             Edge("gateway", "lambda", "4  Invoke tool"),
             Edge("lambda", "sts", "5  AssumeRole", AWS_MAGENTA),
             Edge("sts", "role", "", AWS_MAGENTA),
@@ -193,6 +217,7 @@ def diagram_definitions() -> tuple[Diagram, Diagram]:
             Edge("agent_model", "harness", "model", AWS_TEAL, True),
             Edge("kb_model", "kb", "model", AWS_TEAL, True),
         ),
+        runtime_boundary=RuntimeBoundary(310, 190, 152, 440),
     )
     return code, harness
 
@@ -340,6 +365,62 @@ def draw_account_boundary(
     )
 
 
+def draw_runtime_boundary(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    boundary: RuntimeBoundary,
+) -> None:
+    left = boundary.x
+    top = boundary.y
+    right = left + boundary.width
+    bottom = top + boundary.height
+    rounded_rectangle(
+        draw,
+        (left, top, right, bottom),
+        radius=7,
+        fill="#F4F8FB",
+        outline=AWS_BLUE,
+        width=2,
+    )
+    draw.rounded_rectangle(
+        (
+            left * SCALE,
+            top * SCALE,
+            right * SCALE,
+            (top + 40) * SCALE,
+        ),
+        radius=7 * SCALE,
+        fill=LIGHT_BLUE,
+        outline=None,
+    )
+    draw.rectangle(
+        (
+            left * SCALE,
+            (top + 32) * SCALE,
+            right * SCALE,
+            (top + 40) * SCALE,
+        ),
+        fill=LIGHT_BLUE,
+    )
+    draw.line(
+        (
+            left * SCALE,
+            (top + 40) * SCALE,
+            right * SCALE,
+            (top + 40) * SCALE,
+        ),
+        fill=AWS_BLUE,
+        width=1 * SCALE,
+    )
+    paste_icon(canvas, "agentcore", (left + 9, top + 8, left + 33, top + 32))
+    draw.text(
+        ((left + 39) * SCALE, (top + 11) * SCALE),
+        boundary.label,
+        font=font(12, True),
+        fill=AWS_DARK,
+    )
+
+
 def draw_node(canvas: Image.Image, draw: ImageDraw.ImageDraw, node: Node) -> None:
     rounded_rectangle(
         draw,
@@ -388,7 +469,7 @@ def draw_node(canvas: Image.Image, draw: ImageDraw.ImageDraw, node: Node) -> Non
         draw,
         (node.x + 7, node.y + 80, node.x + node.width - 7, node.y + node.height - 8),
         node.label,
-        font(13, True),
+        font(node.label_size, True),
         AWS_DARK,
         spacing=2,
     )
@@ -449,6 +530,7 @@ def render_png(diagram: Diagram, output: Path) -> None:
 
     draw_account_boundary(canvas, draw, (310, 135, 925, 640), "Agent account")
     draw_account_boundary(canvas, draw, (935, 135, 1385, 640), "Knowledge Base account")
+    draw_runtime_boundary(canvas, draw, diagram.runtime_boundary)
 
     nodes = {node.key: node for node in diagram.nodes}
     for edge in diagram.edges:
@@ -501,10 +583,202 @@ def render_png(diagram: Diagram, output: Path) -> None:
     canvas.convert("RGB").save(output, format="PNG", optimize=True)
 
 
+def draw_polyline_arrow(
+    draw: ImageDraw.ImageDraw,
+    points: tuple[tuple[int, int], ...],
+    color: str,
+) -> None:
+    scaled = tuple((x * SCALE, y * SCALE) for x, y in points)
+    draw.line(scaled[:-1], fill=color, width=2 * SCALE, joint="curve")
+    draw_arrow(draw, points[-2], points[-1], color)
+
+
+def render_overview_png(output: Path) -> None:
+    canvas = Image.new(
+        "RGBA",
+        (CANVAS_WIDTH * SCALE, CANVAS_HEIGHT * SCALE),
+        WHITE,
+    )
+    draw = ImageDraw.Draw(canvas)
+
+    draw.text(
+        (CANVAS_WIDTH * SCALE // 2, 21 * SCALE),
+        "Two AgentCore implementations",
+        font=font(29, True),
+        fill=AWS_DARK,
+        anchor="ma",
+    )
+    draw.text(
+        (CANVAS_WIDTH * SCALE // 2, 61 * SCALE),
+        "One cross-account security pattern",
+        font=font(22, True),
+        fill=AWS_DARK,
+        anchor="ma",
+    )
+    draw.line(
+        (24 * SCALE, 103 * SCALE, 1376 * SCALE, 103 * SCALE),
+        fill=AWS_ORANGE,
+        width=4 * SCALE,
+    )
+
+    panel_top = 130
+    panel_bottom = 465
+    rounded_rectangle(
+        draw,
+        (35, panel_top, 685, panel_bottom),
+        radius=7,
+        fill="#F7FAFC",
+        outline=AWS_GRAY,
+        width=1,
+    )
+    rounded_rectangle(
+        draw,
+        (715, panel_top, 1365, panel_bottom),
+        radius=7,
+        fill=LIGHT_GRAY,
+        outline=AWS_GRAY,
+        width=1,
+    )
+    draw.rectangle((35 * SCALE, panel_top * SCALE, 685 * SCALE, 178 * SCALE), fill=AWS_BLUE)
+    draw.rectangle((715 * SCALE, panel_top * SCALE, 1365 * SCALE, 178 * SCALE), fill=AWS_ORANGE)
+    draw_text_centered(
+        draw,
+        (45, panel_top, 675, 178),
+        "Variant 1: Code-based Strands agent",
+        font(18, True),
+        WHITE,
+    )
+    draw_text_centered(
+        draw,
+        (725, panel_top, 1355, 178),
+        "Variant 2: Declarative AgentCore harness",
+        font(18, True),
+        WHITE,
+    )
+
+    left_runtime = RuntimeBoundary(60, 195, 400, 245)
+    right_runtime = RuntimeBoundary(735, 195, 150, 245)
+    draw_runtime_boundary(canvas, draw, left_runtime)
+    draw_runtime_boundary(canvas, draw, right_runtime)
+
+    overview_nodes = (
+        Node("overview_strands", "Strands Agent\nCustomer agent loop", 85, 255, badge="S", accent=AWS_TEAL),
+        Node("overview_mcp", "Local MCP server\nsubprocess", 285, 255, badge="MCP", accent=AWS_TEAL),
+        Node(
+            "overview_harness",
+            "AgentCore harness\nStrands loop\nMCP client",
+            749,
+            255,
+            badge="S",
+            accent=AWS_TEAL,
+            label_size=11,
+        ),
+        Node(
+            "overview_gateway",
+            "AgentCore Gateway\nMCP tool endpoint",
+            930,
+            255,
+            icon="agentcore",
+            label_size=12,
+        ),
+        Node("overview_lambda", "AWS Lambda\nKB query tool", 1110, 255, icon="lambda"),
+        Node("overview_sts", "AWS STS", 400, 520, icon="sts"),
+        Node("overview_role", "KB access\nIAM role", 555, 520, icon="iam"),
+        Node("overview_kb", "Amazon Bedrock\nKnowledge Base", 710, 520, icon="bedrock"),
+        Node("overview_redshift", "Amazon Redshift\nServerless", 865, 520, icon="redshift"),
+    )
+    overview = {node.key: node for node in overview_nodes}
+
+    draw_arrow(
+        draw,
+        (
+            overview["overview_strands"].x + overview["overview_strands"].width,
+            overview["overview_strands"].center_y,
+        ),
+        (overview["overview_mcp"].x, overview["overview_mcp"].center_y),
+        AWS_DARK,
+    )
+    draw_arrow(
+        draw,
+        (
+            overview["overview_harness"].x + overview["overview_harness"].width,
+            overview["overview_harness"].center_y,
+        ),
+        (overview["overview_gateway"].x, overview["overview_gateway"].center_y),
+        AWS_DARK,
+    )
+    draw_arrow(
+        draw,
+        (
+            overview["overview_gateway"].x + overview["overview_gateway"].width,
+            overview["overview_gateway"].center_y,
+        ),
+        (overview["overview_lambda"].x, overview["overview_lambda"].center_y),
+        AWS_DARK,
+    )
+
+    sts = overview["overview_sts"]
+    draw_polyline_arrow(
+        draw,
+        (
+            (overview["overview_mcp"].center_x, overview["overview_mcp"].y + overview["overview_mcp"].height),
+            (overview["overview_mcp"].center_x, 485),
+            (sts.center_x, 485),
+            (sts.center_x, sts.y),
+        ),
+        AWS_MAGENTA,
+    )
+    draw_polyline_arrow(
+        draw,
+        (
+            (overview["overview_lambda"].center_x, overview["overview_lambda"].y + overview["overview_lambda"].height),
+            (overview["overview_lambda"].center_x, 485),
+            (sts.center_x, 485),
+            (sts.center_x, sts.y),
+        ),
+        AWS_MAGENTA,
+    )
+    for source_key, target_key in (
+        ("overview_sts", "overview_role"),
+        ("overview_role", "overview_kb"),
+        ("overview_kb", "overview_redshift"),
+    ):
+        source = overview[source_key]
+        target = overview[target_key]
+        draw_arrow(
+            draw,
+            (source.x + source.width, source.center_y),
+            (target.x, target.center_y),
+            AWS_MAGENTA if source_key == "overview_sts" else AWS_DARK,
+        )
+
+    for node in overview_nodes:
+        draw_node(canvas, draw, node)
+
+    draw.text(
+        (1045 * SCALE, 543 * SCALE),
+        "Shared cross-account access path",
+        font=font(14, True),
+        fill=AWS_MAGENTA,
+    )
+    source_text = "AWS Architecture Icons package: 2026-04-30"
+    bounds = draw.textbbox((0, 0), source_text, font=font(10))
+    draw.text(
+        ((1376 * SCALE) - (bounds[2] - bounds[0]), 690 * SCALE),
+        source_text,
+        font=font(10),
+        fill=TEXT_GRAY,
+    )
+
+    canvas.convert("RGB").save(output, format="PNG", optimize=True)
+
+
 def image_data_uri(icon_name: str) -> str:
     data = (ICON_DIR / ICON_FILES[icon_name]).read_bytes()
     encoded = base64.b64encode(data).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+    # draw.io styles use semicolons as property separators. Its embedded-image
+    # syntax therefore omits the standard data-URI ";base64" marker.
+    return f"data:image/png,{encoded}"
 
 
 def add_geometry(cell: ET.Element, x: int, y: int, width: int, height: int) -> None:
@@ -637,6 +911,51 @@ def render_drawio(diagram: Diagram, output: Path) -> None:
     add_vertex(root, "agent-account-icon", "", account_image_style, 322, 144, 22, 22)
     add_vertex(root, "kb-account-icon", "", account_image_style, 947, 144, 22, 22)
 
+    runtime = diagram.runtime_boundary
+    runtime_style = (
+        f"rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor=#F4F8FB;"
+        f"strokeColor={AWS_BLUE};strokeWidth=2;"
+    )
+    add_vertex(
+        root,
+        "runtime-boundary",
+        "",
+        runtime_style,
+        runtime.x,
+        runtime.y,
+        runtime.width,
+        runtime.height,
+    )
+    runtime_header_style = (
+        f"rounded=1;arcSize=7;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;"
+        f"spacingLeft=39;fontStyle=1;fontSize=12;fontColor={AWS_DARK};"
+        f"fillColor={LIGHT_BLUE};strokeColor=none;fontFamily=Amazon Ember;"
+    )
+    add_vertex(
+        root,
+        "runtime-header",
+        runtime.label,
+        runtime_header_style,
+        runtime.x + 2,
+        runtime.y + 2,
+        runtime.width - 4,
+        38,
+    )
+    runtime_icon_style = (
+        "shape=image;verticalLabelPosition=bottom;verticalAlign=top;imageAspect=0;"
+        f"aspect=fixed;image={image_data_uri('agentcore')};"
+    )
+    add_vertex(
+        root,
+        "runtime-icon",
+        "",
+        runtime_icon_style,
+        runtime.x + 10,
+        runtime.y + 9,
+        22,
+        22,
+    )
+
     for node in diagram.nodes:
         card_style = (
             f"rounded=1;arcSize=7;whiteSpace=wrap;html=1;fillColor={WHITE};"
@@ -685,7 +1004,8 @@ def render_drawio(diagram: Diagram, output: Path) -> None:
             )
         label_style = (
             f"text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;"
-            f"whiteSpace=wrap;rounded=0;fontColor={AWS_DARK};fontStyle=1;fontSize=13;"
+            f"whiteSpace=wrap;rounded=0;fontColor={AWS_DARK};fontStyle=1;"
+            f"fontSize={node.label_size};"
             "fontFamily=Amazon Ember;"
         )
         add_vertex(
@@ -734,6 +1054,22 @@ def render_drawio(diagram: Diagram, output: Path) -> None:
     tree.write(output, encoding="utf-8", xml_declaration=True)
 
 
+def validate_drawio_images(path: Path) -> None:
+    marker = "image=data:image/png,"
+    image_count = 0
+    for cell in ET.parse(path).getroot().iter("mxCell"):
+        style = cell.get("style", "")
+        if marker not in style:
+            continue
+        encoded = style.split(marker, 1)[1].split(";", 1)[0]
+        payload = base64.b64decode(encoded, validate=True)
+        if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError(f"Invalid embedded PNG in {path}: {cell.get('id')}")
+        image_count += 1
+    if image_count == 0:
+        raise ValueError(f"No embedded PNG images found in {path}")
+
+
 def validate_icons() -> None:
     missing = [name for name in ICON_FILES.values() if not (ICON_DIR / name).exists()]
     if missing:
@@ -755,7 +1091,10 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for diagram in diagram_definitions():
         render_png(diagram, args.output_dir / f"{diagram.name}.png")
-        render_drawio(diagram, args.output_dir / f"{diagram.name}.drawio")
+        drawio_path = args.output_dir / f"{diagram.name}.drawio"
+        render_drawio(diagram, drawio_path)
+        validate_drawio_images(drawio_path)
+    render_overview_png(args.output_dir / "architecture_overview.png")
 
 
 if __name__ == "__main__":
