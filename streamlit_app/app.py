@@ -158,7 +158,7 @@ with st.sidebar:
         "What is the total revenue by region for the year 1998?",
         "Which products generated the highest revenue after discounts?",
         "Show the 100 highest-value orders marked 1-URGENT from October 1 through "
-        "December 31, 1997.",
+        + "December 31, 1997.",
     ]
     for q in sample_queries:
         if st.button(q, key=q, use_container_width=True):
