@@ -1050,14 +1050,15 @@ def render_drawio(diagram: Diagram, output: Path) -> None:
     )
 
     ET.indent(mxfile, space="  ")
+    validate_drawio_images(mxfile, output)
     tree = ET.ElementTree(mxfile)
     tree.write(output, encoding="utf-8", xml_declaration=True)
 
 
-def validate_drawio_images(path: Path) -> None:
+def validate_drawio_images(root: ET.Element, path: Path) -> None:
     marker = "image=data:image/png,"
     image_count = 0
-    for cell in ET.parse(path).getroot().iter("mxCell"):
+    for cell in root.iter("mxCell"):
         style = cell.get("style", "")
         if marker not in style:
             continue
@@ -1093,7 +1094,6 @@ def main() -> None:
         render_png(diagram, args.output_dir / f"{diagram.name}.png")
         drawio_path = args.output_dir / f"{diagram.name}.drawio"
         render_drawio(diagram, drawio_path)
-        validate_drawio_images(drawio_path)
     render_overview_png(args.output_dir / "architecture_overview.png")
 
 
