@@ -31,6 +31,8 @@ class PromptContractTests(unittest.TestCase):
         self.assertIn("without retrying or changing the query", SYSTEM_PROMPT)
         self.assertIn("ask the user to define it", SYSTEM_PROMPT)
         self.assertIn("do not change product names", SYSTEM_PROMPT)
+        self.assertIn("reproduce its answer field exactly", SYSTEM_PROMPT)
+        self.assertIn("Do not summarize, sample", SYSTEM_PROMPT)
 
 
 if __name__ == "__main__":

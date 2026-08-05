@@ -13,8 +13,10 @@ import os
 
 try:
     from .configuration import config_value, load_sibling_config
+    from .kb_response import build_tool_response
 except ImportError:
     from configuration import config_value, load_sibling_config
+    from kb_response import build_tool_response
 
 # ---------------------------------------------------------------------------
 # Configuration — mirrors agent.py: environment overrides, config.json fallback
@@ -121,7 +123,8 @@ def query_knowledge_base(query: str) -> str:
         query: A natural language question about the data in Redshift.
 
     Returns:
-        JSON string with answer, citations, and source metadata.
+        JSON string with a deterministic table for SQL rows, or the generated
+        answer and citations when the response has no structured rows.
     """
     from botocore.exceptions import ClientError
 
@@ -149,24 +152,15 @@ def query_knowledge_base(query: str) -> str:
             },
         )
 
-        generated_text = response.get("output", {}).get("text", "")
-        citations = [
-            {
-                "retrievedReferences": c.get("retrievedReferences", []),
-                "generatedResponsePart": c.get("generatedResponsePart", ""),
-            }
-            for c in response.get("citations", [])
-        ]
-
         logger.info("KB query successful")
         import json
 
-        return json.dumps({
-            "answer":    generated_text,
-            "citations": citations,
-            "query":     query,
-            "source":    f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
-        }, default=str)
+        result = build_tool_response(
+            response,
+            query,
+            f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
+        )
+        return json.dumps(result, default=str)
 
     except ClientError as exc:
         import json

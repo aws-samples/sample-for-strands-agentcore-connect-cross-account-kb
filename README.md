@@ -578,6 +578,11 @@ These queries work with the TPC-H dataset in Redshift Serverless:
 
 Keep row-returning questions bounded with an explicit row count, date range, and sort order. A structured Knowledge Base translates natural language to SQL; an unbounded question can produce an oversized result set and cause `RetrieveAndGenerate` to fail even when the invocation path and IAM configuration are healthy.
 
+For row-returning queries, both variants render the structured rows from the
+Knowledge Base citations as a source-ordered Markdown table instead of relying
+on the generated summary, which might mention only a few example rows. The tool
+displays up to 100 rows and reports both the returned and displayed row counts.
+
 ## Results
 
 In the Streamlit UI make sure to choose the right `Invocation mode` which can be `Local` or `AgentCore` or `Harness`. Make sure the right `ARN` is populated for `AgentCore` or `Harness`. Please refer to the screen shots below.
@@ -613,6 +618,7 @@ The setup script (`create_strands_agentcore_roles_policies.sh`) auto-generates `
     "TARGET_ROLE_ARN": "arn:aws:iam::<agent-kb-account>:role/bedrock_kb_access_role",
     "KB_FOUNDATION_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "AGENT_MODEL_ID": "us.amazon.nova-pro-v1:0",
+    "AGENT_MAX_TOKENS": "5000",
     "AWS_REGION": "us-west-2",
     "KB_NUM_RESULTS": "5",
     "AGENTCORE_MEMORY_ID": "<auto-populated by setup script>"
@@ -622,7 +628,8 @@ The setup script (`create_strands_agentcore_roles_policies.sh`) auto-generates `
 This file is deployed alongside the agent code to AgentCore. **Do not commit this file with real values to a public repository.**
 
 > **`config.json` is fully overwritten every time `create_strands_agentcore_roles_policies.sh`
-> runs.** The fields `KB_FOUNDATION_MODEL`, `AGENT_MODEL_ID`, `AWS_REGION`, and `KB_NUM_RESULTS`
+> runs.** The fields `KB_FOUNDATION_MODEL`, `AGENT_MODEL_ID`, `AGENT_MAX_TOKENS`,
+> `AWS_REGION`, and `KB_NUM_RESULTS`
 > are defaults in the script. If you need different values, either edit the script before running
 > it, or override them with the environment variables in the next section. Manual edits to
 > `config.json` will be lost on the next setup-script run.
@@ -637,6 +644,7 @@ Environment variables take priority over `config.json` values:
 | `TARGET_ROLE_ARN` | from `config.json` | ARN of the KB access role in agent-kb account. Leave empty for same-account. |
 | `KB_FOUNDATION_MODEL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Foundation model for KB queries (supports cross-region inference profiles) |
 | `AGENT_MODEL_ID` | `us.amazon.nova-pro-v1:0` | Foundation model for the Strands Agent |
+| `AGENT_MAX_TOKENS` | `5000` | Maximum output tokens for the Strands Agent; supports complete 100-row Markdown tables with Nova Pro |
 | `AWS_REGION` | `us-west-2` | AWS region |
 | `AWS_PROFILE` | (system default) | AWS CLI profile to use |
 | `KB_NUM_RESULTS` | `5` | Number of retrieval results from the Knowledge Base |

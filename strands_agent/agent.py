@@ -32,6 +32,7 @@ _file_config = load_sibling_config(__file__)
 AGENT_MODEL_ID = config_value(
     _file_config, "AGENT_MODEL_ID", "us.amazon.nova-pro-v1:0"
 )
+AGENT_MAX_TOKENS = int(config_value(_file_config, "AGENT_MAX_TOKENS", "5000"))
 AWS_REGION = config_value(_file_config, "AWS_REGION", "us-west-2")
 AGENTCORE_MEMORY_ID = config_value(_file_config, "AGENTCORE_MEMORY_ID", "")
 
@@ -56,7 +57,10 @@ SYSTEM_PROMPT = (
     "for profit margin), ask the user to define it before calling the tool; "
     "never invent a metric definition. Treat the tool response as the factual "
     "source, and do not change product names, rankings, values, signs, or units. "
-    "Always present the results clearly."
+    "When the tool response has resultFormat set to markdown_table, reproduce "
+    "its answer field exactly, including the introductory row count and every "
+    "table row. Do not summarize, sample, reorder, reformat, truncate, or add "
+    "examples. For other responses, present the answer clearly."
 )
 
 # ---------------------------------------------------------------------------
@@ -164,7 +168,12 @@ def create_agent(
     selected_model_id = agent_model_id or AGENT_MODEL_ID
     selected_region = region_name or AWS_REGION
     tools = _get_mcp_tools(tool_config)
-    model = BedrockModel(model_id=selected_model_id, region_name=selected_region)
+    model = BedrockModel(
+        model_id=selected_model_id,
+        region_name=selected_region,
+        max_tokens=AGENT_MAX_TOKENS,
+        temperature=0.0,
+    )
     config_key = (selected_model_id, selected_region, _mcp_config_key)
 
     if AGENTCORE_MEMORY_ID and session_id:

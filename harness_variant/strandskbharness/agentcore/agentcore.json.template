@@ -59,7 +59,7 @@
           "toolDefinitions": [
             {
               "name": "query_knowledge_base",
-              "description": "Query the cross-account Amazon Redshift Serverless knowledge base. Answers natural-language questions about customers, suppliers, orders, revenue, and products by assuming a role in the knowledge-base account and calling Bedrock retrieve_and_generate.",
+              "description": "Query the cross-account Amazon Redshift Serverless knowledge base. Answers natural-language questions about customers, suppliers, orders, revenue, and products by assuming a role in the knowledge-base account and calling Bedrock retrieve_and_generate. Structured SQL rows are returned as a source-ordered Markdown table with up to 100 rows.",
               "inputSchema": {
                 "type": "object",
                 "properties": {

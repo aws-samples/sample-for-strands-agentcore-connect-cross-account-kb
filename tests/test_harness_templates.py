@@ -36,6 +36,8 @@ class HarnessTemplateTests(unittest.TestCase):
         self.assertIn("000000000000", role_resource)
         self.assertEqual(targets_template[0]["account"], "000000000000")
         self.assertEqual(harness_template["tools"], [])
+        self.assertEqual(harness_template["model"]["temperature"], 0)
+        self.assertEqual(harness_template["model"]["maxTokens"], 5000)
         self.assertEqual(
             tool_config_template["KNOWLEDGE_BASE_ID"],
             "<your-kb-id>",

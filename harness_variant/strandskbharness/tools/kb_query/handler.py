@@ -18,6 +18,11 @@ import json
 import logging
 import os
 
+try:
+    from .kb_response import build_tool_response
+except ImportError:
+    from kb_response import build_tool_response
+
 # In Lambda the runtime pre-configures the root logger at WARNING, so basicConfig
 # is a no-op and INFO lines are dropped. Set the root level explicitly.
 logging.getLogger().setLevel(logging.INFO)
@@ -150,22 +155,12 @@ def _query_knowledge_base(query: str) -> dict:
         },
     )
 
-    generated_text = response.get("output", {}).get("text", "")
-    citations = [
-        {
-            "retrievedReferences": c.get("retrievedReferences", []),
-            "generatedResponsePart": c.get("generatedResponsePart", ""),
-        }
-        for c in response.get("citations", [])
-    ]
-
     logger.info("KB query successful")
-    return {
-        "answer": generated_text,
-        "citations": citations,
-        "query": query,
-        "source": f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
-    }
+    return build_tool_response(
+        response,
+        query,
+        f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
+    )
 
 
 def handler(event, context):

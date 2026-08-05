@@ -640,6 +640,7 @@ jq -n \
     "TARGET_ROLE_ARN": $role_arn,
     "KB_FOUNDATION_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "AGENT_MODEL_ID": "us.amazon.nova-pro-v1:0",
+    "AGENT_MAX_TOKENS": "5000",
     "AWS_REGION": "us-west-2",
     "KB_NUM_RESULTS": "5",
     "AGENTCORE_MEMORY_ID": $memory_id
