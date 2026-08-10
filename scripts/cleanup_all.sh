@@ -175,7 +175,7 @@ else
     if ! command -v agentcore &>/dev/null; then
         echo "  Error: the Python 'agentcore' CLI was not found."
         echo "  Activate the Variant 1 virtual environment or install:"
-        echo "    pip3 install 'bedrock-agentcore>=1.7.0'"
+        echo "    pip3 install 'bedrock-agentcore==1.21.0'"
         echo "  Use --skip-agentcore-destroy only if the runtime is already gone."
         exit 1
     fi

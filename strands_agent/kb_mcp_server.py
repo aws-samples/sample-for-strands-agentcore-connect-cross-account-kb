@@ -10,12 +10,15 @@ decoupled from agent orchestration in agent.py.
 
 import logging
 import os
+import uuid
 
 try:
     from .configuration import config_value, load_sibling_config
+    from .input_validation import validate_query
     from .kb_response import build_tool_response
 except ImportError:
     from configuration import config_value, load_sibling_config
+    from input_validation import validate_query
     from kb_response import build_tool_response
 
 # ---------------------------------------------------------------------------
@@ -79,9 +82,10 @@ def _get_bedrock_client():
     def _refresh():
         sts = boto3.client("sts", region_name=AWS_REGION)
         creds = sts.assume_role(
-            RoleArn=TARGET_ROLE_ARN, RoleSessionName="StrandsAgentKBQuery"
+            RoleArn=TARGET_ROLE_ARN,
+            RoleSessionName=f"StrandsKB-{uuid.uuid4().hex[:12]}",
         )["Credentials"]
-        logger.info("Assumed role (refreshed): %s", TARGET_ROLE_ARN)
+        logger.debug("Refreshed cross-account role credentials")
         return {
             "access_key":  creds["AccessKeyId"],
             "secret_key":  creds["SecretAccessKey"],
@@ -127,13 +131,15 @@ def query_knowledge_base(query: str) -> str:
         answer and citations when the response has no structured rows.
     """
     from botocore.exceptions import ClientError
+    import json
 
     try:
+        query = validate_query(query)
         bedrock_agent_runtime = _get_bedrock_client()
         model_arn = _build_model_arn(KB_FOUNDATION_MODEL)
-        logger.info(
-            "Querying KB %s with model %s (%d results)",
-            KNOWLEDGE_BASE_ID, KB_FOUNDATION_MODEL, KB_NUM_RESULTS,
+        logger.debug(
+            "Querying configured knowledge base (%d retrieval results)",
+            KB_NUM_RESULTS,
         )
 
         response = bedrock_agent_runtime.retrieve_and_generate(
@@ -153,25 +159,27 @@ def query_knowledge_base(query: str) -> str:
         )
 
         logger.info("KB query successful")
-        import json
-
         result = build_tool_response(
             response,
             query,
-            f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
+            "Amazon Redshift Serverless knowledge base",
         )
         return json.dumps(result, default=str)
 
-    except ClientError as exc:
-        import json
-
-        logger.error("AWS API error: %s", exc)
-        return json.dumps({"error": str(exc), "errorType": type(exc).__name__})
-    except Exception as exc:
-        import json
-
-        logger.error("Unexpected error: %s", exc)
-        return json.dumps({"error": str(exc), "errorType": type(exc).__name__})
+    except ValueError as exc:
+        return json.dumps({"error": str(exc), "errorType": "ValidationError"})
+    except ClientError:
+        logger.exception("Knowledge base AWS API request failed")
+        return json.dumps({
+            "error": "The knowledge base query failed. Check server logs.",
+            "errorType": "KnowledgeBaseQueryError",
+        })
+    except Exception:
+        logger.exception("Unexpected knowledge base query failure")
+        return json.dumps({
+            "error": "The knowledge base query failed. Check server logs.",
+            "errorType": "KnowledgeBaseQueryError",
+        })
 
 
 if __name__ == "__main__":

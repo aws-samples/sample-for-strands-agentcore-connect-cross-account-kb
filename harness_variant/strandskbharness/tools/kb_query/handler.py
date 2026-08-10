@@ -17,10 +17,13 @@ Gateway -> Lambda contract:
 import json
 import logging
 import os
+import uuid
 
 try:
+    from .input_validation import validate_query
     from .kb_response import build_tool_response
 except ImportError:
+    from input_validation import validate_query
     from kb_response import build_tool_response
 
 # In Lambda the runtime pre-configures the root logger at WARNING, so basicConfig
@@ -108,9 +111,9 @@ def _get_bedrock_client():
         sts = boto3.client("sts", region_name=region_name)
         credentials = sts.assume_role(
             RoleArn=target_role_arn,
-            RoleSessionName="HarnessKBQuery",
+            RoleSessionName=f"HarnessKB-{uuid.uuid4().hex[:12]}",
         )["Credentials"]
-        logger.info("Assumed cross-account role (refreshed): %s", target_role_arn)
+        logger.debug("Refreshed cross-account role credentials")
         return {
             "access_key": credentials["AccessKeyId"],
             "secret_key": credentials["SecretAccessKey"],
@@ -136,9 +139,9 @@ def _query_knowledge_base(query: str) -> dict:
     """Assume the KB-account role and run retrieve_and_generate against the KB."""
     bedrock_agent_runtime = _get_bedrock_client()
     model_arn = _build_model_arn(KB_FOUNDATION_MODEL)
-    logger.info(
-        "Querying KB %s with model %s (%d results)",
-        KNOWLEDGE_BASE_ID, KB_FOUNDATION_MODEL, KB_NUM_RESULTS,
+    logger.debug(
+        "Querying configured knowledge base (%d retrieval results)",
+        KB_NUM_RESULTS,
     )
 
     response = bedrock_agent_runtime.retrieve_and_generate(
@@ -159,7 +162,7 @@ def _query_knowledge_base(query: str) -> dict:
     return build_tool_response(
         response,
         query,
-        f"Amazon Redshift Serverless KB: {KNOWLEDGE_BASE_ID}",
+        "Amazon Redshift Serverless knowledge base",
     )
 
 
@@ -181,17 +184,25 @@ def handler(event, context):
 
     # Strip the "<target>___" prefix to get the bare tool name.
     short_name = tool_name.split("___", 1)[-1] if "___" in tool_name else tool_name
-    logger.info("Invoked tool: %s (short=%s)", tool_name, short_name)
+    logger.debug("Invoked Gateway tool: %s", short_name)
 
     query = event.get("query") if isinstance(event, dict) else None
-    if not query:
-        return {"error": "Missing required 'query' argument", "errorType": "ValidationError"}
+    try:
+        query = validate_query(query)
+    except ValueError as exc:
+        return {"error": str(exc), "errorType": "ValidationError"}
 
     try:
         return _query_knowledge_base(query)
-    except ClientError as exc:
-        logger.error("AWS API error: %s", exc)
-        return {"error": str(exc), "errorType": type(exc).__name__}
-    except Exception as exc:  # noqa: BLE001 - surface any failure as a tool error
-        logger.error("Unexpected error: %s", exc)
-        return {"error": str(exc), "errorType": type(exc).__name__}
+    except ClientError:
+        logger.exception("Knowledge base AWS API request failed")
+        return {
+            "error": "The knowledge base query failed. Check server logs.",
+            "errorType": "KnowledgeBaseQueryError",
+        }
+    except Exception:  # noqa: BLE001 - return a stable tool error
+        logger.exception("Unexpected knowledge base query failure")
+        return {
+            "error": "The knowledge base query failed. Check server logs.",
+            "errorType": "KnowledgeBaseQueryError",
+        }

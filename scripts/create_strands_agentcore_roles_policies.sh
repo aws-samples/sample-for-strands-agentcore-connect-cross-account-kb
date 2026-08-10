@@ -567,6 +567,7 @@ fi
 echo "Step 6: Creating AgentCore Memory resource in agent account..."
 
 MEMORY_NAME="cross_account_kb_memory"
+MEMORY_RETENTION_DAYS=30
 EXISTING_MEMORY_ID=$(aws bedrock-agentcore-control list-memories \
   --profile "$AGENT_PROFILE" \
   --query "memories[?starts_with(id, '${MEMORY_NAME}-')].id | [0]" \
@@ -575,11 +576,27 @@ EXISTING_MEMORY_ID=$(aws bedrock-agentcore-control list-memories \
 if [[ -n "$EXISTING_MEMORY_ID" && "$EXISTING_MEMORY_ID" != "None" ]]; then
     echo "  AgentCore Memory already exists: $EXISTING_MEMORY_ID"
     AGENTCORE_MEMORY_ID="$EXISTING_MEMORY_ID"
+    EXISTING_RETENTION=$(aws bedrock-agentcore-control get-memory \
+      --memory-id "$AGENTCORE_MEMORY_ID" \
+      --profile "$AGENT_PROFILE" \
+      --query 'memory.eventExpiryDuration' \
+      --output text 2>/dev/null)
+    if [[ "$EXISTING_RETENTION" != "$MEMORY_RETENTION_DAYS" ]]; then
+        echo "  Updating memory event retention to $MEMORY_RETENTION_DAYS days..."
+        UPDATE_OUTPUT=$(aws bedrock-agentcore-control update-memory \
+          --memory-id "$AGENTCORE_MEMORY_ID" \
+          --event-expiry-duration "$MEMORY_RETENTION_DAYS" \
+          --client-token "$(uuidgen)" \
+          --profile "$AGENT_PROFILE" 2>&1)
+        if [ $? -ne 0 ]; then
+            echo "  Warning: Could not update memory retention. Error: $UPDATE_OUTPUT"
+        fi
+    fi
 else
     echo "  Creating new AgentCore Memory resource..."
     AGENTCORE_MEMORY_ID=$(aws bedrock-agentcore-control create-memory \
       --name "$MEMORY_NAME" \
-      --event-expiry-duration 90 \
+      --event-expiry-duration "$MEMORY_RETENTION_DAYS" \
       --client-token "$(uuidgen)" \
       --profile "$AGENT_PROFILE" \
       --query 'memory.id' \

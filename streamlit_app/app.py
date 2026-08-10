@@ -17,7 +17,6 @@ import logging
 import os
 import sys
 import time
-import traceback
 
 import boto3
 import streamlit as st
@@ -37,6 +36,7 @@ from streamlit_app.streaming import (
     strip_thinking_text,
 )
 from strands_agent.configuration import config_value, load_sibling_config
+from strands_agent.input_validation import MAX_QUERY_LENGTH, validate_query
 
 logger = logging.getLogger(__name__)
 _AGENT_FILE_CONFIG = load_sibling_config(
@@ -185,7 +185,6 @@ os.environ["TARGET_ROLE_ARN"] = target_role_arn
 os.environ["KB_FOUNDATION_MODEL"] = kb_model
 os.environ["AGENT_MODEL_ID"] = agent_model
 os.environ["AWS_REGION"] = region
-os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +194,14 @@ def get_local_agent():
     """Return an agent isolated to the current Streamlit browser session."""
     if not _STRANDS_AVAILABLE:
         raise ImportError(_STRANDS_IMPORT_ERROR)
+    if os.environ.get("BYPASS_TOOL_CONSENT", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        raise RuntimeError(
+            "Local mode requires explicit BYPASS_TOOL_CONSENT=true configuration."
+        )
     from strands_agent.agent import create_agent
 
     tool_config = {
@@ -253,7 +260,6 @@ def stream_agentcore(prompt: str):
         runtimeSessionId=st.session_state.agentcore_session_id,
         payload=json.dumps({
             "prompt": prompt,
-            "actor_id": st.session_state.agentcore_session_id,
         }).encode("utf-8"),
     )
 
@@ -334,9 +340,18 @@ for msg in st.session_state.messages:
 prefill = st.session_state.pop("prefill", None)
 
 # Chat input
-prompt = st.chat_input("Ask a question about your Redshift data...") or prefill
+prompt = st.chat_input(
+    "Ask a question about your Redshift data...",
+    max_chars=MAX_QUERY_LENGTH,
+) or prefill
 
 if prompt:
+    try:
+        prompt = validate_query(prompt)
+    except ValueError as exc:
+        st.error(str(exc))
+        st.stop()
+
     # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -365,11 +380,10 @@ if prompt:
             st.session_state.messages.append(
                 {"role": "assistant", "content": response}
             )
-        except Exception as exc:
-            tb = traceback.format_exc()
-            error_msg = f"Error: {exc}"
+        except Exception:
+            logger.exception("Invocation failed in %s mode", mode)
+            error_msg = "Unable to complete the request. Check application logs."
             st.error(error_msg)
-            st.code(tb, language="text")
             st.session_state.messages.append(
                 {"role": "assistant", "content": error_msg}
             )
