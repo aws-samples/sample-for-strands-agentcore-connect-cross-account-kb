@@ -38,6 +38,11 @@ class HarnessTemplateTests(unittest.TestCase):
         self.assertEqual(harness_template["tools"], [])
         self.assertEqual(harness_template["model"]["temperature"], 0)
         self.assertEqual(harness_template["model"]["maxTokens"], 5000)
+        query_schema = (
+            agentcore_template["agentCoreGateways"][0]["targets"][0]
+            ["toolDefinitions"][0]["inputSchema"]["properties"]["query"]
+        )
+        self.assertEqual(query_schema["maxLength"], 2000)
         self.assertEqual(
             tool_config_template["KNOWLEDGE_BASE_ID"],
             "<your-kb-id>",

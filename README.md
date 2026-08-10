@@ -293,6 +293,10 @@ deactivate
 cd ..
 ```
 
+`BYPASS_TOOL_CONSENT=true` is an explicit opt-out appropriate only for this
+trusted local sample. Do not set it for shared or production-facing clients
+without replacing it with an application-specific approval control.
+
 > **Note:** Environment variables take priority, with `strands_agent/config.json` used as the fallback. `kb_mcp_server.py` is launched automatically as a subprocess on first run, so no manual startup is needed.
 
 ### Option B: Streamlit Chat UI
@@ -654,6 +658,33 @@ Environment variables take priority over `config.json` values:
 | `AGENTCORE_HARNESS_ARN` | (not set) | ARN of the deployed AgentCore harness (for Streamlit Harness mode) |
 
 Changing Local-mode settings in the Streamlit sidebar restarts the MCP subprocess and recreates the browser-session agent automatically, so the next query uses the new Knowledge Base, role, model, and region values. Local conversation history is isolated by Streamlit browser session.
+
+### Security defaults
+
+The sample validates questions at the Streamlit, AgentCore runtime, MCP, and
+Gateway Lambda boundaries. Questions must be non-empty strings of 2,000
+characters or fewer and cannot contain unsupported control characters. Runtime
+and tool errors return stable messages to callers while detailed exceptions
+remain in application or CloudWatch logs.
+
+The Streamlit development server binds to `127.0.0.1` by default. Override
+`STREAMLIT_SERVER_ADDRESS` only when you intentionally place the UI behind an
+authenticated network boundary. AgentCore runtime and harness invocation use
+AWS IAM authorization; grant invoke permissions only to intended callers. The
+default runtime endpoint can be publicly routable, but it is not anonymous:
+requests must be authorized and signed. Select VPC networking when your
+organization requires private connectivity in addition to IAM authorization.
+The sample's system prompts also treat retrieved tool output as untrusted data and
+instruct the model not to follow embedded instructions or disclose internal
+configuration. Add Amazon Bedrock Guardrails and application-specific
+authorization when your use case requires additional input, output, topic, or
+data-access controls.
+
+AgentCore mode derives its memory actor partition from the runtime session and
+stores only a hash of that value; it does not accept an actor namespace in the
+request payload. Production clients should derive runtime session IDs and
+harness `actorId` values from authenticated application state rather than
+accepting either value directly from a user.
 
 ## Tests
 

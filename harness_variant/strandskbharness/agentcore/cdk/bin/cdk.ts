@@ -174,7 +174,7 @@ async function main() {
       harnesses: harnessConfigs.length > 0 ? harnessConfigs : undefined,
       paymentSpec,
       env,
-      description: `AgentCore stack for ${spec.name} deployed to ${target.name} (${target.region})`,
+      description: 'Amazon Bedrock AgentCore sample deployment',
       tags: {
         'agentcore:project-name': spec.name,
         'agentcore:target-name': target.name,

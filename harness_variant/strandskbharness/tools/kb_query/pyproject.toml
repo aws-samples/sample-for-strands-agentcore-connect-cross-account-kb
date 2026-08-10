@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "AgentCore Gateway Lambda tool: cross-account Bedrock Knowledge Base query"
 requires-python = ">=3.10"
 dependencies = [
-    "boto3 >= 1.42.0",
-    "botocore >= 1.35.0",
+    "boto3 == 1.43.67",
+    "botocore == 1.43.67",
 ]
 
 [tool.hatch.build.targets.wheel]

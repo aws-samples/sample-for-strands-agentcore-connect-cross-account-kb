@@ -25,7 +25,18 @@ class HarnessHandlerTests(unittest.TestCase):
         result = handler.handler({}, None)
 
         self.assertEqual(result["errorType"], "ValidationError")
-        self.assertIn("query", result["error"])
+        self.assertIn("query", result["error"].lower())
+
+    def test_unexpected_errors_are_not_returned_to_callers(self):
+        with patch.object(
+            handler,
+            "_query_knowledge_base",
+            side_effect=RuntimeError("internal account and resource details"),
+        ):
+            result = handler.handler({"query": "Show revenue."}, None)
+
+        self.assertEqual(result["errorType"], "KnowledgeBaseQueryError")
+        self.assertNotIn("internal account", result["error"])
 
     @patch("boto3.Session")
     @patch("boto3.client")
@@ -67,10 +78,18 @@ class HarnessHandlerTests(unittest.TestCase):
         refreshed = refresh_callback()
         self.assertEqual(refreshed["access_key"], "access-key")
         self.assertEqual(sts_client.assume_role.call_count, 2)
-        sts_client.assume_role.assert_called_with(
-            RoleArn="arn:aws:iam::123456789012:role/kb-access",
-            RoleSessionName="HarnessKBQuery",
-        )
+        session_names = []
+        for call in sts_client.assume_role.call_args_list:
+            self.assertEqual(
+                call.kwargs["RoleArn"],
+                "arn:aws:iam::123456789012:role/kb-access",
+            )
+            self.assertRegex(
+                call.kwargs["RoleSessionName"],
+                r"^HarnessKB-[0-9a-f]{12}$",
+            )
+            session_names.append(call.kwargs["RoleSessionName"])
+        self.assertEqual(len(set(session_names)), 2)
         boto3_session.assert_called_once_with(botocore_session=get_session.return_value)
 
 
