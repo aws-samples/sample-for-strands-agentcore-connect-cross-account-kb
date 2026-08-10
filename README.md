@@ -21,11 +21,7 @@ This repository implements the cross-account query pattern in two ways: a **Stra
 
 > The two variants demonstrate the same business outcome, but they are not drop-in replacements. The choice determines who owns the agent loop, how tools are hosted, which IAM principal crosses the account boundary, and which infrastructure you operate. See [Two Variants in This Repo](#two-variants-in-this-repo) before choosing an implementation.
 
-The following overview highlights the execution boundary shared by the two implementations. In
-Variant 1, the customer-managed Strands loop and local MCP server subprocess are packaged together
-inside AgentCore Runtime. In Variant 2, the managed Strands-powered harness loop and its MCP client
-run inside AgentCore Runtime; AgentCore Gateway and the AWS Lambda tool remain separate managed
-resources.
+The following overview highlights the execution boundary shared by the two implementations. In Variant 1, the customer-managed Strands loop and local MCP server subprocess are packaged together inside AgentCore Runtime. In Variant 2, the managed Strands-powered harness loop and its MCP client run inside AgentCore Runtime; AgentCore Gateway and the AWS Lambda tool remain separate managed resources.
 
 ![Architecture Overview](images/architecture_overview.png)
 
@@ -33,11 +29,8 @@ resources.
 
 ![Architecture Diagram](images/architecture.png)
 
-The diagram uses the official
-[AWS Architecture Icons package dated April 30, 2026](https://aws.amazon.com/architecture/icons/).
-Neutral labeled shapes represent non-AWS components such as Streamlit, Strands, and the local MCP
-subprocess. The blue AgentCore Runtime boundary shows which components execute in the same runtime
-session.
+The diagram uses the official [AWS Architecture Icons package dated April 30, 2026](https://aws.amazon.com/architecture/icons/). Neutral labeled shapes represent non-AWS components such as Streamlit, Strands, and the local MCP
+subprocess. The blue AgentCore Runtime boundary shows which components execute in the same runtime session.
 
 **Data flow (Variant 1 — code-based agent):**
 
@@ -64,10 +57,7 @@ session.
 
 ## Two Variants in This Repo
 
-This repository demonstrates the same cross-account Knowledge Base security pattern through two
-AgentCore orchestration models. The cross-account requirement itself does not favor either
-variant: both use a narrowly scoped role in the Knowledge Base account. Choose based on how much
-of the agent loop your team needs to customize and operate.
+This repository demonstrates the same cross-account Knowledge Base security pattern through two AgentCore orchestration models. The cross-account requirement itself does not favor either variant: both use a narrowly scoped role in the Knowledge Base account. Choose based on how much of the agent loop your team needs to customize and operate.
 
 > **Decision in one sentence:** Choose the code-based Strands variant when custom orchestration is a product requirement. Choose the harness when its managed agent loop fits your use case and you prefer a configuration-first operating model.
 
@@ -582,10 +572,7 @@ These queries work with the TPC-H dataset in Redshift Serverless:
 
 Keep row-returning questions bounded with an explicit row count, date range, and sort order. A structured Knowledge Base translates natural language to SQL; an unbounded question can produce an oversized result set and cause `RetrieveAndGenerate` to fail even when the invocation path and IAM configuration are healthy.
 
-For row-returning queries, both variants render the structured rows from the
-Knowledge Base citations as a source-ordered Markdown table instead of relying
-on the generated summary, which might mention only a few example rows. The tool
-displays up to 100 rows and reports both the returned and displayed row counts.
+For row-returning queries, both variants render the structured rows from the Knowledge Base citations as a source-ordered Markdown table instead of relying on the generated summary, which might mention only a few example rows. The tool displays up to 100 rows and reports both the returned and displayed row counts.
 
 ## Results
 
@@ -661,30 +648,11 @@ Changing Local-mode settings in the Streamlit sidebar restarts the MCP subproces
 
 ### Security defaults
 
-The sample validates questions at the Streamlit, AgentCore runtime, MCP, and
-Gateway Lambda boundaries. Questions must be non-empty strings of 2,000
-characters or fewer and cannot contain unsupported control characters. Runtime
-and tool errors return stable messages to callers while detailed exceptions
-remain in application or CloudWatch logs.
+The sample validates questions at the Streamlit, AgentCore runtime, MCP, and Gateway Lambda boundaries. Questions must be non-empty strings of 2,000 characters or fewer and cannot contain unsupported control characters. Runtime and tool errors return stable messages to callers while detailed exceptions remain in application or CloudWatch logs.
 
-The Streamlit development server binds to `127.0.0.1` by default. Override
-`STREAMLIT_SERVER_ADDRESS` only when you intentionally place the UI behind an
-authenticated network boundary. AgentCore runtime and harness invocation use
-AWS IAM authorization; grant invoke permissions only to intended callers. The
-default runtime endpoint can be publicly routable, but it is not anonymous:
-requests must be authorized and signed. Select VPC networking when your
-organization requires private connectivity in addition to IAM authorization.
-The sample's system prompts also treat retrieved tool output as untrusted data and
-instruct the model not to follow embedded instructions or disclose internal
-configuration. Add Amazon Bedrock Guardrails and application-specific
-authorization when your use case requires additional input, output, topic, or
-data-access controls.
+The Streamlit development server binds to `127.0.0.1` by default. Override `STREAMLIT_SERVER_ADDRESS` only when you intentionally place the UI behind an authenticated network boundary. AgentCore runtime and harness invocation use AWS IAM authorization; grant invoke permissions only to intended callers. The default runtime endpoint can be publicly routable, but it is not anonymous: requests must be authorized and signed. Select VPC networking when your organization requires private connectivity in addition to IAM authorization. The sample's system prompts also treat retrieved tool output as untrusted data and instruct the model not to follow embedded instructions or disclose internal configuration. Add Amazon Bedrock Guardrails and application-specific authorization when your use case requires additional input, output, topic, or data-access controls.
 
-AgentCore mode derives its memory actor partition from the runtime session and
-stores only a hash of that value; it does not accept an actor namespace in the
-request payload. Production clients should derive runtime session IDs and
-harness `actorId` values from authenticated application state rather than
-accepting either value directly from a user.
+AgentCore mode derives its memory actor partition from the runtime session and stores only a hash of that value; it does not accept an actor namespace in the request payload. Production clients should derive runtime session IDs and harness `actorId` values from authenticated application state rather than accepting either value directly from a user.
 
 ## Tests
 
