@@ -386,9 +386,28 @@ cd ..
 Once deployed, you can also use the **Streamlit chat UI in AgentCore mode** to interact with the deployed agent with real-time streaming:
 
 ```bash
-# Get the runtime ARN from the deployment output
-export AGENTCORE_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:<agent-account>:runtime/<agent-id>
-export AGENTCORE_HARNESS_ARN=arn:aws:bedrock-agentcore:us-west-2:<agent-account>:harness/<harness-id>
+# Retrieve the code-based runtime ARN. This also works if the deployment
+# output is no longer available.
+export AGENTCORE_RUNTIME_ARN="$(
+    aws bedrock-agentcore-control list-agent-runtimes \
+        --profile agent \
+        --region us-west-2 \
+        --query "agentRuntimes[?agentRuntimeName=='strands_kb_query_agent'].agentRuntimeArn | [0]" \
+        --output text
+)"
+
+# After deploying Variant 2, retrieve its harness ARN from the stack output.
+export AGENTCORE_HARNESS_ARN="$(
+    aws cloudformation describe-stacks \
+        --stack-name AgentCore-strandskbharness-default \
+        --profile agent \
+        --region us-west-2 \
+        --query "Stacks[0].Outputs[?contains(OutputKey, 'HarnessArn')].OutputValue | [0]" \
+        --output text
+)"
+
+printf 'AgentCore runtime: %s\nHarness: %s\n' \
+    "$AGENTCORE_RUNTIME_ARN" "$AGENTCORE_HARNESS_ARN"
 
 # Launch Streamlit
 cd streamlit_app
@@ -531,7 +550,14 @@ You can also drive it from the **Streamlit UI in Harness mode** — select **Har
 
 ```bash
 # From the repository root:
-export AGENTCORE_HARNESS_ARN=arn:aws:bedrock-agentcore:us-west-2:<agent-account>:harness/<harness-id>
+export AGENTCORE_HARNESS_ARN="$(
+    aws cloudformation describe-stacks \
+        --stack-name AgentCore-strandskbharness-default \
+        --profile agent \
+        --region us-west-2 \
+        --query "Stacks[0].Outputs[?contains(OutputKey, 'HarnessArn')].OutputValue | [0]" \
+        --output text
+)"
 cd streamlit_app && streamlit run app.py
 ```
 
