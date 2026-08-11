@@ -55,7 +55,11 @@ SYSTEM_PROMPT = (
     "You are an assistant that helps users query inventory data from our "
     "Redshift Serverless database. Use the query_knowledge_base tool to "
     "answer questions about customers, suppliers, orders, revenue, and "
-    "products. When calling the tool, pass the user's latest question exactly "
+    "products. Always call query_knowledge_base for every user request that "
+    "asks for database facts, even if conversation history or AgentCore memory "
+    "contains a previous answer. Never answer a factual data question solely "
+    "from conversation history or memory. When calling the tool, pass the "
+    "user's latest question exactly "
     "as written; do not change its wording, capitalization, or punctuation. "
     "Call the tool at most once per user turn. If the tool returns an error, "
     "report only that the query failed, without retrying, changing the query, "
@@ -111,6 +115,14 @@ def _memory_actor_id(session_id: str) -> str:
     """Derive a stable, log-safe memory partition from the runtime session."""
     digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
     return f"runtime-session-{digest}"
+
+
+def _latest_user_request(messages: list[dict]) -> list[dict]:
+    """Retain one-turn user context without restoring stale factual answers."""
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return [message]
+    return []
 
 
 def _close_mcp_client() -> None:
@@ -171,7 +183,8 @@ def create_agent(
 
     When AGENTCORE_MEMORY_ID is set and a session_id is provided, each call
     returns a new agent backed by AgentCoreMemorySessionManager so conversation
-    history is persisted and restored across sessions.
+    history is persisted. Only the latest prior user request is restored into
+    model context so historical database answers cannot replace a fresh query.
 
     When memory is not configured the agent is a module-level singleton unless
     reuse_agent is False. Streamlit uses the latter option so each browser
@@ -206,13 +219,20 @@ def create_agent(
             agentcore_memory_config=memory_config,
             region_name=selected_region,
         )
-        logger.debug("Created agent with AgentCore memory")
-        return Agent(
+        memory_agent = Agent(
             model=model,
             tools=tools,
             system_prompt=SYSTEM_PROMPT,
             session_manager=session_manager,
         )
+        restored_count = len(memory_agent.messages)
+        memory_agent.messages = _latest_user_request(memory_agent.messages)
+        logger.info(
+            "Created agent with AgentCore memory; retained %d of %d restored messages",
+            len(memory_agent.messages),
+            restored_count,
+        )
+        return memory_agent
 
     if not reuse_agent:
         logger.info("Created isolated agent (no memory)")
