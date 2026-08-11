@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
 
 # Cleanup script for the AgentCore HARNESS VARIANT (harness_variant/strandskbharness).
 #

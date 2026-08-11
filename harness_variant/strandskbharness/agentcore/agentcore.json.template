@@ -82,7 +82,7 @@
               "path": "tools/kb_query",
               "handler": "handler.handler"
             },
-            "pythonVersion": "PYTHON_3_12",
+            "pythonVersion": "PYTHON_3_14",
             "timeout": 180,
             "memorySize": 512,
             "iamPolicy": {

@@ -1,6 +1,7 @@
 {
   "name": "agentcore-cdk-app",
   "version": "0.1.0",
+  "license": "MIT-0",
   "bin": {
     "cdk": "dist/bin/cdk.js"
   },

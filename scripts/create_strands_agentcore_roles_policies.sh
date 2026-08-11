@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
 
 # Script to create IAM roles and policies for Strands Agent + AgentCore
 # cross-account knowledge base access.

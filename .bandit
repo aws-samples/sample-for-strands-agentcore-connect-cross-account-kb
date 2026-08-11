@@ -1,0 +1,8 @@
+---
+exclude_dirs:
+  - .venv
+  - strands_agent/.venv
+  - .protoshield
+  - agentcore
+  - harness_variant/strandskbharness/agentcore/.cache
+  - harness_variant/strandskbharness/agentcore/cdk/node_modules

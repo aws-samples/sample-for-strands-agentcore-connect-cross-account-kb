@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT-0
+
 import {
   AgentCoreApplication,
   AgentCoreMcp,
@@ -8,7 +11,7 @@ import {
   type CustomJWTAuthorizerConfig,
   type HarnessDeploymentConfig,
 } from '@aws/agentcore-cdk';
-import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
+import { ArnFormat, CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
@@ -84,6 +87,39 @@ function isPaymentEligibleAgent(agent: { entrypoint?: string; protocol?: string 
   return entrypointFile.endsWith('.py');
 }
 
+function scopeMcpLambdaLogging(mcp: AgentCoreMcp): void {
+  for (const fn of mcp.lambdaFunctions.values()) {
+    const role = fn.role;
+    const cfnRole = role?.node.defaultChild;
+    if (!role || !(cfnRole instanceof iam.CfnRole)) {
+      continue;
+    }
+
+    cfnRole.managedPolicyArns = undefined;
+    const logGroupArn = Stack.of(fn).formatArn({
+      service: 'logs',
+      resource: 'log-group',
+      resourceName: `/aws/lambda/${fn.functionName}`,
+      arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+    });
+
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'LambdaLogGroup',
+        actions: ['logs:CreateLogGroup'],
+        resources: [logGroupArn],
+      })
+    );
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'LambdaLogStream',
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: [`${logGroupArn}:log-stream:*`],
+      })
+    );
+  }
+}
+
 /**
  * CDK Stack that deploys AgentCore infrastructure.
  *
@@ -115,13 +151,14 @@ export class AgentCoreStack extends Stack {
 
     // Create AgentCoreMcp if there are gateways configured
     if (mcpSpec?.agentCoreGateways && mcpSpec.agentCoreGateways.length > 0) {
-      new AgentCoreMcp(this, 'Mcp', {
+      const mcp = new AgentCoreMcp(this, 'Mcp', {
         projectName: spec.name,
         mcpSpec,
         agentCoreApplication: this.application,
         credentials,
         projectTags: spec.tags,
       });
+      scopeMcpLambdaLogging(mcp);
     }
 
     // Create payment infrastructure via CFN constructs
