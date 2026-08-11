@@ -50,6 +50,26 @@ class AgentEntrypointTests(unittest.IsolatedAsyncioTestCase):
             expected_actor,
         )
 
+    def test_memory_restores_only_the_latest_user_request(self):
+        messages = [
+            {"role": "user", "content": [{"text": "Show revenue."}]},
+            {"role": "assistant", "content": [{"text": "Stale answer."}]},
+            {"role": "user", "content": [{"text": "Now show suppliers."}]},
+            {"role": "assistant", "content": [{"text": "Another stale answer."}]},
+        ]
+
+        self.assertEqual(
+            agent._latest_user_request(messages),
+            [{"role": "user", "content": [{"text": "Now show suppliers."}]}],
+        )
+
+    def test_memory_with_no_user_request_restores_no_messages(self):
+        messages = [
+            {"role": "assistant", "content": [{"text": "Stale answer."}]},
+        ]
+
+        self.assertEqual(agent._latest_user_request(messages), [])
+
     async def test_invalid_prompt_is_rejected_before_agent_creation(self):
         with patch.object(agent, "create_agent") as create:
             chunks = [
