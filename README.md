@@ -4,7 +4,7 @@ This project demonstrates two ways to use **Amazon Bedrock AgentCore** to query 
 
 > **Note:** This project reimplements the cross-account Knowledge Base pattern from [Connect Amazon Bedrock Agents to Cross-Account Knowledge Bases](https://medium.com/@dwexpertkg/connect-amazon-bedrock-agents-to-cross-account-knowledge-bases-02694e900d8a) using both a Strands agent on AgentCore Runtime and an AgentCore harness.
 
-## Challenge
+## Challenges
 
 Organizations that build AI agents using Amazon Bedrock often maintain structured data in Amazon Redshift in a separate AWS account. Amazon Bedrock Knowledge Bases resource policies support cross-account `Retrieve` and `GetDocumentContent`, but the [supported resource-policy actions](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-managed-cross-account.html) do not include `RetrieveAndGenerate`. This sample uses `RetrieveAndGenerate` to return a generated answer from a structured Knowledge Base, so its tool assumes a role in the Knowledge Base account before making the request.
 
