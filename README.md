@@ -2,7 +2,7 @@
 
 This project demonstrates two ways to use **Amazon Bedrock AgentCore** to query a Knowledge Base in a different AWS account: a code-based **Strands Agent** on AgentCore Runtime and a declarative **AgentCore harness**. The Knowledge Base connects to Amazon Redshift Serverless for structured data, and a Streamlit chat interface supports end-to-end testing.
 
-> **Note:** This project reimplements the cross-account Knowledge Base pattern from [Connect Amazon Bedrock Agents to Cross-Account Knowledge Bases](https://medium.com/@dwexpertkg/connect-amazon-bedrock-agents-to-cross-account-knowledge-bases-02694e900d8a) using both a Strands agent on AgentCore Runtime and an AgentCore harness.
+> **Note:** This project reimplements the cross-account Knowledge Base pattern from [Connect Amazon Bedrock Agents to Cross-Account Knowledge Bases](https://medium.com/@dwexpertkg/connect-amazon-bedrock-agents-to-cross-account-knowledge-bases-02694e900d8a) using both a Strands agent on AgentCore Runtime and an AgentCore harness. We recommend using Amazon Bedrock AgentCore for agentic AI application.
 
 ## Challenges
 
