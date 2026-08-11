@@ -11,8 +11,9 @@ import {
   type CustomJWTAuthorizerConfig,
   type HarnessDeploymentConfig,
 } from '@aws/agentcore-cdk';
-import { ArnFormat, CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
+import { ArnFormat, CfnOutput, Stack, Token, type StackProps } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
 /**
@@ -87,19 +88,29 @@ function isPaymentEligibleAgent(agent: { entrypoint?: string; protocol?: string 
   return entrypointFile.endsWith('.py');
 }
 
-function scopeMcpLambdaLogging(mcp: AgentCoreMcp): void {
+export function scopeMcpLambdaLogging(mcp: AgentCoreMcp): void {
   for (const fn of mcp.lambdaFunctions.values()) {
     const role = fn.role;
     const cfnRole = role?.node.defaultChild;
-    if (!role || !(cfnRole instanceof iam.CfnRole)) {
+    const cfnFunction = fn.node.defaultChild;
+    if (
+      !role
+      || !(cfnRole instanceof iam.CfnRole)
+      || !(cfnFunction instanceof lambda.CfnFunction)
+    ) {
       continue;
+    }
+
+    const functionName = cfnFunction.functionName;
+    if (!functionName || Token.isUnresolved(functionName)) {
+      throw new Error('MCP Lambda logging requires an explicit function name');
     }
 
     cfnRole.managedPolicyArns = undefined;
     const logGroupArn = Stack.of(fn).formatArn({
       service: 'logs',
       resource: 'log-group',
-      resourceName: `/aws/lambda/${fn.functionName}`,
+      resourceName: `/aws/lambda/${functionName}`,
       arnFormat: ArnFormat.COLON_RESOURCE_NAME,
     });
 

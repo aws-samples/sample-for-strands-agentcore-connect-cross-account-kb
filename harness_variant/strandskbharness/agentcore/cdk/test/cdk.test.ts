@@ -3,9 +3,11 @@
 
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AgentCoreStack } from '../lib/cdk-stack';
+import type { AgentCoreMcp } from '@aws/agentcore-cdk';
+import { AgentCoreStack, scopeMcpLambdaLogging } from '../lib/cdk-stack';
 
 test('AgentCoreStack synthesizes with empty spec', () => {
   const app = new cdk.App();
@@ -46,4 +48,31 @@ test('Lambda log groups remain reusable across stack recreation', () => {
   const cdkConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../cdk.json'), 'utf8'));
 
   expect(cdkConfig.context['@aws-cdk/aws-lambda:useCdkManagedLogGroup']).toBe(false);
+});
+
+test('Lambda logging policies do not depend on the Lambda function resource', () => {
+  const app = new cdk.App();
+  const stack = new cdk.Stack(app, 'LoggingStack');
+  const fn = new lambda.Function(stack, 'ToolFunction', {
+    code: lambda.Code.fromInline('def handler(event, context): return {}'),
+    functionName: 'test-kb-tool',
+    handler: 'index.handler',
+    runtime: lambda.Runtime.PYTHON_3_14,
+  });
+
+  scopeMcpLambdaLogging({
+    lambdaFunctions: new Map([['tool', fn]]),
+  } as unknown as AgentCoreMcp);
+
+  const resources = Template.fromStack(stack).toJSON().Resources;
+  const loggingPolicy = Object.values(resources).find((resource: any) =>
+    resource.Type === 'AWS::IAM::Policy'
+      && resource.Properties.PolicyDocument.Statement.some(
+        (statement: any) => statement.Sid === 'LambdaLogGroup'
+      )
+  ) as any;
+  const statements = loggingPolicy.Properties.PolicyDocument.Statement;
+
+  expect(JSON.stringify(statements)).toContain('/aws/lambda/test-kb-tool');
+  expect(JSON.stringify(statements)).not.toContain('"Ref":"ToolFunction');
 });
