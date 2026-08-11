@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 """
 AgentCore Gateway Lambda target: cross-account Bedrock Knowledge Base query.
 

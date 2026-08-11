@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
 
 # Script to delete IAM roles and policies created for Strands Agent + AgentCore
 # Usage: ./delete_strands_agentcore_roles_policies.sh [options]

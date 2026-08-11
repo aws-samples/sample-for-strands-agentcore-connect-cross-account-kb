@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 """Pure helpers for filtering and decoding streamed agent responses."""
 
 from http.client import IncompleteRead

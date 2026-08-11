@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 """Normalize Knowledge Base responses for deterministic agent presentation."""
 
 MAX_FORMATTED_ROWS = 100

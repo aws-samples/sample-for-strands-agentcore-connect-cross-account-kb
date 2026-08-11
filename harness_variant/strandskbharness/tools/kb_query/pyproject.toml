@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "kb_query_tool"
 version = "0.1.0"
 description = "AgentCore Gateway Lambda tool: cross-account Bedrock Knowledge Base query"
+license = "MIT-0"
 requires-python = ">=3.10"
 dependencies = [
     "boto3 == 1.43.67",

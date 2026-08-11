@@ -9,6 +9,7 @@
 .DS_Store
 .bedrock_agentcore
 .bedrock_agentcore.yaml
+.protoshield
 /agentcore
 harness_variant/strandskbharness/agentcore/.cache
 harness_variant/strandskbharness/agentcore/cdk/node_modules

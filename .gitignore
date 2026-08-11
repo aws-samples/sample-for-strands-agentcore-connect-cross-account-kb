@@ -8,6 +8,7 @@ __pycache__/
 .claude/
 .bedrock_agentcore.yaml
 .bedrock_agentcore/
+.protoshield/
 /agentcore/
 strands_agent/config.json
 harness_variant/strandskbharness/tools/kb_query/config.json

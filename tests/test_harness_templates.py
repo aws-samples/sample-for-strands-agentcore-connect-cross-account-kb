@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 import json
 import re
 import unittest
@@ -44,6 +47,11 @@ class HarnessTemplateTests(unittest.TestCase):
         )
         self.assertEqual(query_schema["maxLength"], 2000)
         self.assertEqual(
+            agentcore_template["agentCoreGateways"][0]["targets"][0]["compute"]
+            ["pythonVersion"],
+            "PYTHON_3_14",
+        )
+        self.assertEqual(
             tool_config_template["KNOWLEDGE_BASE_ID"],
             "<your-kb-id>",
         )
@@ -57,10 +65,26 @@ class HarnessTemplateTests(unittest.TestCase):
             (HARNESS_ROOT / "agentcore" / "cdk" / "package.json").read_text()
         )
 
+        self.assertEqual(package["license"], "MIT-0")
         for dependency_group in ("dependencies", "devDependencies"):
             for name, version in package[dependency_group].items():
                 with self.subTest(group=dependency_group, dependency=name):
                     self.assertRegex(version, EXACT_SEMVER)
+
+    def test_streamlit_requirements_include_agent_dependencies(self):
+        def requirements(path):
+            return {
+                line.strip()
+                for line in path.read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            }
+
+        agent_requirements = requirements(PROJECT_ROOT / "strands_agent" / "requirements.txt")
+        streamlit_requirements = requirements(
+            PROJECT_ROOT / "streamlit_app" / "requirements.txt"
+        )
+
+        self.assertLess(agent_requirements, streamlit_requirements)
 
 
 if __name__ == "__main__":
