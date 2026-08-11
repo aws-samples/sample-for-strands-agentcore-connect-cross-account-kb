@@ -490,7 +490,7 @@ AgentCore Runtime [AgentCore harness: managed Strands loop + MCP client]
   → bedrock:retrieve_and_generate → Knowledge Base → Redshift Serverless
 ```
 
-To regenerate all architecture diagrams after changing their shared layout, install [Pillow](https://pypi.org/project/pillow/) and run.
+To regenerate all architecture diagrams after changing their shared layout, install [Pillow](https://pypi.org/project/pillow/) and re run it.
 
 ```bash
 python scripts/generate_architecture_diagrams.py
